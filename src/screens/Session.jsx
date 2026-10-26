@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useStore, getState, updateSession } from '../lib/store.js'
-import { position, swapOptions, suggest, sessionSlots, todaysPlan } from '../engine/program.js'
+import { position, swapOptions, suggest, sessionSlots, todaysPlan, adjustSets, estMinutes } from '../engine/program.js'
 import { cardioSession, sessionMinutes } from '../engine/plan.js'
 import { Treadmill } from './Cardio.jsx'
 import { BY_ID } from '../engine/exercises.js'
@@ -10,16 +10,36 @@ import { activeSession, startSession, finishSession, discardSession, swapExercis
 import { restTimerRemote } from '../lib/cloud.js'
 import { Press, Icon, Figure, HoldPill, Menu, Sheet, fmtClock, springPop, Opener, useCompact } from '../ui/kit.jsx'
 import { haptic, sound, localNotify } from '../lib/feedback.js'
+import { dayJob, effortWords, WEEK_MEANING, PART_CAPTION, CORE_CAPTION, muscleLine, cardioPurpose } from '../engine/purpose.js'
+import { BodyMap, loadFrom } from '../ui/bodymap.jsx'
+import { WeekSheet, openExercise } from '../ui/explain.jsx'
+import { Chips } from './You.jsx'
+import { setLive, useLive } from '../lib/live.js'
+import { Avatar } from '../ui/avatar.jsx'
 import { TopBar, TimedStep, Fade, Stage, Head } from './Flow.jsx'
 import { partMinutes } from './Today.jsx'
 
 const PARTS = ['Warm-up', 'Strength', 'Accessory', 'Cool-down']
-const TONE = { train: '#B7C8B3', done: '#C6B4BE' }
+const TONE = { train: 'var(--t-train)', done: 'var(--t-done)' }
 
 function buildSteps(sess) {
   const out = []
   ;(sess.warm || []).forEach((w, i) => out.push({ kind: 'timed', part: 0, key: `w${i}`, step: w }))
-  sess.entries.forEach((e) => e.sets.forEach((x) => out.push({ kind: 'set', part: e.isMain ? 1 : 2, entryId: e.id, setId: x.id })))
+  // a pair is done back and forth: both warm-ups, then one set of each in turn
+  const taken = new Set()
+  const push = (e, x) => out.push({ kind: 'set', part: e.isMain ? 1 : 2, entryId: e.id, setId: x.id })
+  sess.entries.forEach((e) => {
+    if (taken.has(e.id)) return
+    const mate = e.pair ? sess.entries.find((m) => m.id !== e.id && m.pair === e.pair) : null
+    if (!mate) { e.sets.forEach((x) => push(e, x)); return }
+    taken.add(mate.id)
+    const alt = (kind) => {
+      const a = e.sets.filter((x) => (x.kind === 'work') === kind), b = mate.sets.filter((x) => (x.kind === 'work') === kind)
+      for (let i = 0; i < Math.max(a.length, b.length); i++) { if (a[i]) push(e, a[i]); if (b[i]) push(mate, b[i]) }
+    }
+    alt(false)
+    alt(true)
+  })
   if (sess.finisherPlan) out.push({ kind: 'tread', part: 3, key: 'fin' })
   ;(sess.cool || []).forEach((c, i) => out.push({ kind: 'timed', part: 3, key: `c${i}`, step: c }))
   return out
@@ -31,6 +51,7 @@ export default function Session({ origin, onClose }) {
   const sess = activeSession(state)
   const [summary, setSummary] = useState(null)
   const [short, setShort] = useState(false)
+  const [energy, setEnergy] = useState('normal')
   const [menu, setMenu] = useState(null)
   const [swap, setSwap] = useState(false)
   const steps = sess ? buildSteps(sess) : []
@@ -45,21 +66,36 @@ export default function Session({ origin, onClose }) {
     }
   }, [sess?.id, idx, sess?.feelFor])
 
+  // your crew sees which move and set you're on, while you're on it
+  useEffect(() => {
+    if (!sess || summary) { setLive(null); return }
+    const pr = getState().profile
+    let ex = null, set = null, of = null
+    if (cur?.kind === 'set') { const en = sess.entries.find((e) => e.id === cur.entryId); const work = en.sets.filter((x) => x.kind === 'work'); const k = work.findIndex((x) => x.id === cur.setId); ex = BY_ID[en.exerciseId]?.name; if (k >= 0) { set = k + 1; of = work.length } }
+    else if (cur?.kind === 'timed') ex = cur.part === 0 ? 'Warming up' : 'Cooling down'
+    else if (cur?.kind === 'tread') ex = 'On the treadmill'
+    setLive({ name: pr.name, avatar: pr.avatar, title: titleOf(sess.focus), ex, set, of })
+  }, [sess?.id, cur?.setId, cur?.key, !!summary])
+  useEffect(() => () => setLive(null), [])
+
   const parts = sess ? [0, 1, 2, 3].map((p) => { const s = steps.filter((x) => x.part === p); return s.length ? s.filter((x) => isDone(sess, x)).length / s.length : 1 }) : [0, 0, 0, 0]
   const entry = cur?.kind === 'set' ? sess.entries.find((e) => e.id === cur.entryId) : null
   const resting = sess?.restUntil && new Date(sess.restUntil).getTime() > Date.now()
+  // the first time you reach each part, one line on what it is for
+  const group = (st) => (st.kind === 'set' && sess.entries.find((e) => e.id === st.entryId)?.core ? 'core' : st.part)
+  const caption = cur && cur.kind !== 'tread' && steps.findIndex((st) => group(st) === group(cur)) === idx ? (group(cur) === 'core' ? CORE_CAPTION : PART_CAPTION[cur.part]) : null
 
   let view
   if (summary) view = <Summary key="sum" sess={summary} onClose={onClose} />
-  else if (!sess) view = <Overview key="ov" state={state} short={short} setShort={setShort} onBegin={() => { startSession({ short }); haptic('success') }} />
+  else if (!sess) view = <Overview key="ov" state={state} short={short} setShort={setShort} energy={energy} setEnergy={setEnergy} onBegin={() => { startSession({ short, energy }); haptic('success') }} />
   else if (sess.feelFor) view = <Feel key={`feel-${sess.feelFor}`} sess={sess} />
   else if (resting) view = <Rest key={`rest-${sess.restUntil}`} sess={sess} next={cur} />
   else if (cur?.kind === 'tread') view = <Treadmill key="fin" inline plan={sess.finisherPlan} onDone={(l) => {
     if (l.test) finishCardio({ desc: null, plan: sess.finisherPlan, startedAt: new Date().toISOString(), segments: l.segments, feel: null, test: l.test, partOf: sess.id })
     updateSession(sess.id, (x) => ({ ...x, finisherDone: true, finisherLog: l }))
   }} />
-  else if (cur?.kind === 'timed') view = <TimedStep key={cur.key} step={cur.step} first={cur.key === 'w0'} onDone={() => updateSession(sess.id, (x) => ({ ...x, timedDone: [...(x.timedDone || []), cur.key] }))} />
-  else if (cur?.kind === 'set') view = <SetStep key={cur.setId} sess={sess} entry={entry} setId={cur.setId} part={cur.part} steps={steps} idx={idx} />
+  else if (cur?.kind === 'timed') view = <TimedStep key={cur.key} step={cur.step} first={cur.key === 'w0'} caption={caption} onDone={() => updateSession(sess.id, (x) => ({ ...x, timedDone: [...(x.timedDone || []), cur.key] }))} />
+  else if (cur?.kind === 'set') view = <SetStep key={cur.setId} sess={sess} entry={entry} setId={cur.setId} part={cur.part} steps={steps} idx={idx} caption={caption} />
 
   const segments = [2, 6, 4, 2].map((f, i) => (
     <span key={i} style={{ flex: f, maxWidth: [30, 90, 60, 30][i], height: 6, borderRadius: 3, background: 'var(--ink-4)', overflow: 'hidden', display: 'block' }}>
@@ -74,6 +110,7 @@ export default function Session({ origin, onClose }) {
           segments={sess ? segments : <span />}
           right={entry && !resting && !sess.feelFor ? <Press className="circle" aria-label="Swap this exercise" onClick={() => setSwap(true)}><Icon name="swap" size={18} /></Press> : null} />
       </div>
+      <LiveStrip />
       <div style={{ flex: 1, position: 'relative' }}>
         <AnimatePresence mode="popLayout" initial={false}><Fade key={view?.key || 'x'}>{view}</Fade></AnimatePresence>
       </div>
@@ -114,47 +151,78 @@ export function WeekBars({ week, types, height = 48 }) {
   )
 }
 
-function Overview({ state, short, setShort, onBegin }) {
+function Overview({ state, short, setShort, energy, setEnergy, onBegin }) {
   const pos = position(state)
   const day = pos.day
   const weeks = pos.weeks || state.program.weeks
   const units = state.profile.units
   const tp = todaysPlan(state)
   const desc = tp?.next?.kind === 'lift' ? tp.next : null
-  const moves = sessionSlots(state, pos.dayIdx, { short, desc }).map((slot) => ({ slot, ex: BY_ID[slot.exerciseId], sg: suggest(state, slot, pos.week, pos.isDeload) }))
+  const [weekOpen, setWeekOpen] = useState(false)
+  const moves = sessionSlots(state, pos.dayIdx, { short, desc }).map((slot) => {
+    const sg = suggest(state, slot, pos.week, pos.isDeload)
+    return { slot, ex: BY_ID[slot.exerciseId], sg: { ...sg, sets: adjustSets(slot, sg.sets, { short, energy }) } }
+  })
   const fin = desc?.finisher ? cardioSession(state, desc, tp.pw, { finisher: true }) : null
-  const H = [0.5, 0.66, 0.82, 1, 0.38]
+  const main = moves.find((m) => m.slot.isMain) || moves[0]
+  const rir = main ? (main.sg.rir ?? 2) + (energy === 'tired' ? 1 : 0) : null
+  const load = loadFrom(moves.map((m) => ({ id: m.ex.id, sets: m.sg.sets })), BY_ID)
+  const pw = pos.pw
   return (
     <Stage scroll
-      head={<Head big kicker={day.name} title={titleOf(day.focus)} sub={`Week ${pos.week} of ${weeks} · ${pos.pw ? pos.pw.label : PHASE(pos.week, weeks)}${short ? ' · short version' : ''}`} />}
+      head={<Head big kicker={day.name} title={titleOf(day.focus)} sub={`Week ${pos.week} of ${weeks} · ${estMinutes(moves.map((m) => m.slot)) + (fin ? sessionMinutes(fin) : 0)} min${short ? ' · short version' : ''}`} />}
       foot={<HoldPill label="Hold to begin" onComplete={onBegin} />}>
-      {/* the block: weeks that build, then an easy one */}
-      <WeekBars week={pos.week} types={pos.pw?.types || Array.from({ length: weeks }, (_, i) => (i === weeks - 1 ? 'easy' : 'build'))} />
-      <div className="list" style={{ marginTop: 20 }}>
-        {moves.map(({ slot, ex, sg }, i) => (
-          <motion.div key={slot.id} className="li" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ ...springPop, delay: 0.1 + 0.03 * i }}>
-            <span className="t">{ex.name}</span>
-            <span className="s num"><b>{sg.sets} sets · {targetLabel(ex, sg.weight, sg.reps[0], units)}</b></span>
-            <span className="s">{sg.why}</span>
-          </motion.div>
-        ))}
+      {/* the plan's weeks; tap for what each kind of week is for */}
+      <Press as="div" role="button" scale={0.98} aria-label="How the plan works" onClick={() => pw && setWeekOpen(true)} style={{ display: 'grid', justifyItems: 'center' }}>
+        <WeekBars week={pos.week} types={pw?.types || Array.from({ length: weeks }, (_, i) => (i === weeks - 1 ? 'easy' : 'build'))} />
+        <span className="small" style={{ marginTop: 10 }}>{pw ? `${pw.label}: ${WEEK_MEANING[pw.type].short}` : PHASE(pos.week, weeks)}</span>
+      </Press>
+      {/* today's job: what it works and how it should feel */}
+      <div className="tile center" style={{ marginTop: 20, padding: '20px 16px 18px' }}>
+        <BodyMap load={load} size={168} />
+        <p style={{ margin: '14px auto 0', maxWidth: 290, font: '600 16px/1.35 var(--font)', textWrap: 'balance' }}>{dayJob(day.focus)}</p>
+        <p className="small" style={{ margin: '6px auto 0', maxWidth: 290, fontSize: 14 }}>{effortWords(rir)}</p>
+      </div>
+      <div className="label">How do you feel?</div>
+      <Chips grid label="How do you feel" value={energy} onChange={setEnergy} options={[['Tired', 'tired'], ['Normal', 'normal'], ['Fresh', 'fresh']]} />
+      <p className="small center" style={{ marginTop: 10, minHeight: 18 }}>{energy === 'tired' ? 'Fewer accessory sets, a little more left in the tank' : energy === 'fresh' ? 'One more set on the main lifts' : 'The plan as written'}</p>
+      <div className="list" style={{ marginTop: 16 }}>
+        {moves.map(({ slot, ex, sg }, i) => {
+          // a pair is one row: both moves, done back and forth
+          if (slot.pair && moves.findIndex((m) => m.slot.pair === slot.pair) !== i) return null
+          const mate = slot.pair ? moves.find((m) => m.slot !== slot && m.slot.pair === slot.pair) : null
+          return (
+            <motion.div key={slot.id} className="li" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ ...springPop, delay: 0.1 + 0.03 * i }}>
+              <button className="t" onClick={() => openExercise(ex.id)}>{ex.name}</button>
+              <span className="s num"><b>{sg.sets} sets · {targetLabel(ex, sg.weight, sg.reps[0], units)}</b></span>
+              {mate ? (
+                <>
+                  <button className="t" style={{ marginTop: 8 }} onClick={() => openExercise(mate.ex.id)}>{mate.ex.name}</button>
+                  <span className="s num"><b>{mate.sg.sets} sets · {targetLabel(mate.ex, mate.sg.weight, mate.sg.reps[0], units)}</b></span>
+                  <span className="s" style={{ marginTop: 4 }}>Back and forth, one set of each</span>
+                </>
+              ) : <span className="s">{sg.why}</span>}
+            </motion.div>
+          )
+        })}
         {fin && (
           <div className="li">
             <span className="t">{fin.title}</span>
             <span className="s num"><b>{sessionMinutes(fin)} min on the treadmill</b></span>
-            <span className="s">{fin.test ? 'Your fitness test, after lifting' : 'Easy and steady, after lifting'}</span>
+            <span className="s">{fin.test ? 'Your fitness test, after lifting' : cardioPurpose(fin)}</span>
           </div>
         )}
       </div>
       <div className="center" style={{ marginTop: 18, marginBottom: 8 }}>
         <Press className={`chip ${short ? 'on' : ''}`} onClick={() => setShort(!short)} aria-pressed={short}>Short on time</Press>
       </div>
+      <WeekSheet open={weekOpen} onClose={() => setWeekOpen(false)} pw={pw} />
     </Stage>
   )
 }
 
 // ---------- one set ----------
-function SetStep({ sess, entry, setId, part, steps, idx }) {
+function SetStep({ sess, entry, setId, part, steps, idx, caption }) {
   const state = getState()
   const compact = useCompact()
   const ex = BY_ID[entry.exerciseId]
@@ -176,7 +244,13 @@ function SetStep({ sess, entry, setId, part, steps, idx }) {
     const weight = loaded ? options[wi] : 0
     const last = !warm && k === work.length - 1
     const next = steps.slice(idx + 1).find((st) => !isDone(sess, st) && !(st.kind === 'set' && st.setId === setId))
-    const restSecs = next?.kind === 'set' ? (warm ? 45 : last ? 60 : entry.rest || 90) : 0
+    // in a pair, going from one move to its partner is just a short walk over
+    const mate = entry.pair ? sess.entries.find((m) => m.id !== entry.id && m.pair === entry.pair) : null
+    const firstOfPair = mate && sess.entries.indexOf(sess.entries.find((x) => x.id === entry.id)) < sess.entries.indexOf(mate)
+    const toMate = mate && next?.kind === 'set' && next.entryId === mate.id && (warm || firstOfPair)
+    const mateLeft = mate && mate.sets.some((y) => y.kind === 'work' && !y.done)
+    const roundRest = mate && next?.entryId === mate.id ? Math.max(60, Math.max(entry.rest || 90, mate.rest || 90) - 30) : null // each muscle rested while the other worked
+    const restSecs = next?.kind === 'set' ? (toMate ? 20 : warm ? 45 : roundRest ?? (last ? 60 : entry.rest || 90)) : 0
     // the rest of this exercise uses what you just did, or on a first-time set, the corrected weight
     let carry = loaded && weight !== set.weight ? weight : null
     if (feel === 'light') { const t = roundTo(ex, weight * 1.15, state.profile.equipment); carry = t > weight ? t : nextUp(ex, weight, state.profile.equipment) }
@@ -209,17 +283,19 @@ function SetStep({ sess, entry, setId, part, steps, idx }) {
         sets: e.sets.map((y) => (y.id === setId ? { ...y, done: true, reps, weight, at: new Date().toISOString() }
           : !y.done && y.kind === set.kind && (carry != null || nextTarget != null) ? { ...y, weight: carry ?? y.weight, target: nextTarget ?? y.target } : y)),
       }),
-      feelFor: last ? entry.id : x.feelFor,
+      // how it felt is asked once a move is finished; in a pair, once both are
+      ...(last && !mateLeft ? (() => { const q = [...(x.feelLater || []), entry.id]; return { feelFor: q[0], feelLater: q.slice(1) } })()
+        : last ? { feelLater: [...(x.feelLater || []), entry.id] } : {}),
       restUntil: restSecs ? new Date(Date.now() + restSecs * 1000).toISOString() : null,
       restTotal: restSecs,
-      restNote: feel === 'light' && carry !== weight ? `Next sets go up to ${carry} ${units}` : feel === 'heavy' && carry !== weight ? `Next sets drop to ${carry} ${units}` : last ? null : adj,
+      restNote: feel === 'light' && carry !== weight ? `Next sets go up to ${carry} ${units}` : feel === 'heavy' && carry !== weight ? `Next sets drop to ${carry} ${units}` : toMate ? `Straight on to ${BY_ID[mate.exerciseId].name}` : last ? null : adj,
     }))
     if (restSecs) restTimerRemote.start(`${sess.id}:${setId}`, restSecs, 'Rest is up', 'Next set when you are ready.')
   }
 
   const wLabel = ex.load === 'band' ? BAND_LEVELS[options[wi]] : `${options[wi]}`
   const partName = entry.core ? 'Core' : PARTS[part]
-  const sub = warm ? `${partName} · warm-up set` : `${partName} · set ${k + 1} of ${work.length}`
+  const sub = warm ? `${partName} · warm-up set` : `Set ${k + 1} of ${work.length}`
   const changed = (loaded && options[wi] !== set.weight) || reps !== (set.target ?? 8)
   const why = warm ? 'Light, to get the joints ready'
     : calibrating ? 'First time: how does this weight feel?'
@@ -233,7 +309,10 @@ function SetStep({ sess, entry, setId, part, steps, idx }) {
     : 'Same as the last set'
   const firstSet = idx === steps.findIndex((st) => st.kind === 'set')
   return (
-    <Stage head={<Head title={ex.name} sub={sub} />} row={calibrating ? 3 : 0}
+    <Stage head={<>
+      <Head kicker={caption} title={ex.name} sub={sub} />
+      <div className="center" style={{ marginTop: 10 }}><Press className="chip" style={{ height: 34, fontSize: 13, padding: '0 14px' }} onClick={() => openExercise(ex.id)} aria-label={`${ex.name}: what it works and your progress`}>{muscleLine(ex)}</Press></div>
+    </>} row={calibrating ? 3 : 0}
       foot={calibrating
         ? <><Press className="pill soft" style={{ fontSize: 15 }} onClick={() => done('light')}>Too light</Press><Press className="pill ink" style={{ fontSize: 15 }} onClick={() => done('right')}>Just right</Press><Press className="pill soft" style={{ fontSize: 15 }} onClick={() => done('heavy')}>Too heavy</Press></>
         : <Press className="pill ink" onClick={() => done()}>Done</Press>}>
@@ -293,7 +372,7 @@ function Feel({ sess }) {
   const pick = (v) => {
     haptic('light')
     const rir = { easy: 3, good: 2, hard: 0 }[v]
-    updateSession(sess.id, (x) => ({ ...x, feelFor: null, entries: x.entries.map((e) => (e.id === entry.id ? { ...e, feel: v, sets: e.sets.map((y) => (y.kind === 'work' && y.done ? { ...y, rir } : y)) } : e)) }))
+    updateSession(sess.id, (x) => ({ ...x, feelFor: (x.feelLater || [])[0] || null, feelLater: (x.feelLater || []).slice(1), entries: x.entries.map((e) => (e.id === entry.id ? { ...e, feel: v, sets: e.sets.map((y) => (y.kind === 'work' && y.done ? { ...y, rir } : y)) } : e)) }))
   }
   return (
     <Stage head={<Head title="How did that feel?" sub={ex?.name} />}>
@@ -339,7 +418,7 @@ function Rest({ sess, next }) {
   const H = compact ? 230 : 320
   const end = () => { restTimerRemote.cancel(`${sess.id}:${next?.setId}`); updateSession(sess.id, (x) => ({ ...x, restUntil: null })) }
   return (
-    <Stage head={<Head title="Rest" sub={sess.restNote || (ex ? `Next: ${ex.name}, ${targetLabel(ex, s?.weight, s?.target ?? '', getState().profile.units)}` : 'Next up soon')} />} row
+    <Stage head={<Head title={total <= 20 ? 'Switch' : 'Rest'} sub={sess.restNote || (ex ? `Next: ${ex.name}, ${targetLabel(ex, s?.weight, s?.target ?? '', getState().profile.units)}` : 'Next up soon')} />} row
       foot={<>
         <Press className="pill soft" onClick={() => updateSession(sess.id, (x) => ({ ...x, restUntil: new Date(new Date(x.restUntil).getTime() + 15000).toISOString(), restTotal: (x.restTotal || 90) + 15 }))}>+15 s</Press>
         <Press className="pill ink" onClick={end}>Skip</Press>
@@ -395,5 +474,22 @@ function SwapSheet({ open, onClose, sess, entry }) {
         )) : <div className="li"><span className="s">Nothing else fits your equipment.</span></div>}
       </div>
     </Sheet>
+  )
+}
+
+// Someone in your crew training right now: their leaf, the move, the set. Slides in, slides away.
+function LiveStrip() {
+  const live = useLive()
+  return (
+    <AnimatePresence initial={false}>
+      {live.slice(0, 2).map((x) => (
+        <motion.div key={x.name} initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={springPop} style={{ overflow: 'hidden', display: 'grid', justifyContent: 'center' }}>
+          <div className="toast lg" role="status" style={{ position: 'relative', left: 'auto', bottom: 'auto', transform: 'none', margin: '8px auto 0', display: 'flex', alignItems: 'center', gap: 8, padding: '6px 14px 6px 6px', whiteSpace: 'nowrap' }}>
+            <Avatar avatar={x.avatar} size={26} raised={false} />
+            <span>{x.name} · {x.ex}{x.set ? `, set ${x.set} of ${x.of}` : ''}</span>
+          </div>
+        </motion.div>
+      ))}
+    </AnimatePresence>
   )
 }

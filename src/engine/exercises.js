@@ -84,7 +84,7 @@ export const EXERCISES = [
   X({ id: 'band_pulldown', name: 'Band Lat Pulldown', pattern: 'vpull', load: 'band', tier: 'main', requires: ['bands'], muscles: ['lats', 'biceps'], cue: 'Anchor high, elbows to the ribs.' }),
   X({ id: 'db_pullover', name: 'Dumbbell Pullover', pattern: 'vpull', load: 'db', single: true, tier: 'main', requires: ['dumbbells', 'bench'], muscles: ['lats', 'chest'], stress: ['shoulders'], cue: 'Long arms, stretch behind the head.' }),
   X({ id: 'db_kneel_row_high', name: 'High-Elbow Dumbbell Row', pattern: 'vpull', load: 'db', tier: 'main', requires: ['dumbbells'], muscles: ['lats', 'rearDelts'], cue: 'Pull toward the chest, elbows wide.' }),
-  X({ id: 'towel_row', name: 'Doorframe Row', pattern: 'vpull', load: 'bw', tier: 'main', muscles: ['lats', 'biceps'], cue: 'Grip the frame, lean back, pull.' }),
+  X({ id: 'towel_row', name: 'Doorframe Row', pattern: 'hpull', load: 'bw', tier: 'main', muscles: ['lats', 'biceps'], cue: 'Grip the frame, lean back, pull.' }),
 
   // single leg
   X({ id: 'db_bulgarian', name: 'Bulgarian Split Squat', pattern: 'lunge', load: 'db', tier: 'acc', requires: ['dumbbells', 'bench'], muscles: ['quads', 'glutes'], stress: ['knees'], cue: 'Back foot on the bench, front shin vertical-ish.' }),
@@ -119,6 +119,8 @@ export const EXERCISES = [
   X({ id: 'diamond_pushup', name: 'Close-Grip Push-up', pattern: 'triceps', load: 'bw', tier: 'acc', muscles: ['triceps', 'chest'], stress: ['wrists'], cue: 'Hands under the shoulders, elbows tight.' }),
   X({ id: 'calf_raise', name: 'Single-Leg Calf Raise', pattern: 'calves', load: 'db', single: true, tier: 'acc', requires: ['dumbbells'], muscles: ['calves'], cue: 'Full stretch at the bottom, pause up top.' }),
   X({ id: 'calf_raise_bw', name: 'Calf Raise', pattern: 'calves', load: 'bw', tier: 'acc', muscles: ['calves'], cue: 'On a step, full range.' }),
+  X({ id: 'prone_pulldown', name: 'Floor Pulldown', pattern: 'vpull', load: 'bw', tier: 'acc', muscles: ['lats', 'rearDelts'], cue: 'Face down, arms long. Pull your elbows to your ribs, chest just off the floor.' }),
+  X({ id: 'farmer_carry', name: 'Farmer Carry', pattern: 'core', load: 'db', unit: 'sec', tier: 'acc', requires: ['dumbbells'], muscles: ['core', 'back'], cue: 'Heavy bells at your sides, tall chest. Walk laps of the room.' }),
   X({ id: 'hanging_knee', name: 'Hanging Knee Raise', pattern: 'core', load: 'bw', tier: 'acc', requires: ['pullupBar'], muscles: ['core'], cue: 'Curl the pelvis, no swinging.' }),
   X({ id: 'dead_bug', name: 'Dead Bug', pattern: 'core', load: 'bw', tier: 'acc', muscles: ['core'], cue: 'Low back glued down, slow reach.' }),
   X({ id: 'plank', name: 'Plank', pattern: 'core', load: 'bw', unit: 'sec', tier: 'acc', muscles: ['core'], stress: ['wrists'], cue: 'Squeeze glutes, push the floor away.' }),
@@ -174,6 +176,6 @@ export function candidatesFor(pattern, equip, easyOn = []) {
 // The pool a slot rotates through: the best tier available.
 export function poolFor(pattern, equip, easyOn = []) {
   const c = candidatesFor(pattern, equip, easyOn)
-  const strong = c.filter((e) => !e.ladderOnly && !(e.load === 'bw' && !e.requires.length) && !e.stress.some((s) => easyOn.includes(s)))
+  const strong = c.filter((e) => !e.ladderOnly && (pattern === 'core' || !(e.load === 'bw' && !e.requires.length)) && !e.stress.some((s) => easyOn.includes(s)))
   return strong.length ? strong : c.filter((e) => !e.ladderOnly)
 }

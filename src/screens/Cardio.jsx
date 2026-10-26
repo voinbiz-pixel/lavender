@@ -7,8 +7,10 @@ import { finishCardio, setSpeed } from '../lib/actions.js'
 import { Press, Icon, fmtClock, spring, springPop, Opener, useCompact, toast } from '../ui/kit.jsx'
 import { haptic, sound } from '../lib/feedback.js'
 import { TopBar, Fade, Stage, Head } from './Flow.jsx'
+import { cardioPurpose } from '../engine/purpose.js'
+import { setLive } from '../lib/live.js'
 
-export const CARDIO_TONE = '#B9C6CC'
+export const CARDIO_TONE = 'var(--t-cardio)'
 const LEVEL_H = { 1: 0.28, 2: 0.46, 3: 0.64, 4: 0.82, 5: 1 }
 
 // The shape of a session: one bar per segment, as wide as it is long, as tall as it is hard.
@@ -29,6 +31,8 @@ export default function Cardio({ desc, origin, onClose }) {
   const state = useStore()
   const plan = useMemo(() => { const tp = todaysPlan(getState()); return cardioSession(getState(), desc, tp.pw) }, [desc?.key])
   const [phase, setPhase] = useState('intro') // intro | run | feel | done
+  useEffect(() => { const pr = state.profile; setLive(phase === 'run' ? { name: pr.name, avatar: pr.avatar, title: plan.title, ex: plan.title } : null) }, [phase])
+  useEffect(() => () => setLive(null), [])
   const [result, setResult] = useState(null)
   const startedAt = useRef(null)
   const [log, setLog] = useState(null)
@@ -46,7 +50,9 @@ export default function Cardio({ desc, origin, onClose }) {
             <Fade key="intro">
               <Stage head={<Head big title={plan.title} sub={`${plan.sub ? `${plan.sub} · ` : ''}about ${mins} min`} />}
                 foot={<Press className="pill ink" onClick={() => { startedAt.current = new Date().toISOString(); setPhase('run') }}>Begin</Press>}>
-                {plan.note && <p className="center" style={{ margin: '0 auto 18px', maxWidth: 290, font: '600 15px/1.35 var(--font)', textWrap: 'balance' }}>{plan.note}</p>}
+                {!plan.test && <p className="center" style={{ margin: '0 auto 6px', maxWidth: 290, font: '600 16px/1.35 var(--font)', textWrap: 'balance' }}>{cardioPurpose(plan)}</p>}
+                {plan.note && <p className="small center" style={{ margin: '0 auto 18px', maxWidth: 290, fontSize: 14 }}>{plan.note}</p>}
+                {!plan.note && <div style={{ height: 12 }} />}
                 <SegmentBars segments={plan.segments} height={140} />
                 <Zones state={state} segments={plan.segments} />
                 {plan.test && <p className="small center" style={{ margin: '14px auto 0', maxWidth: 290, fontSize: 15 }}>{plan.test === 'mile' ? 'Your time is the score. Retest at the end of the plan to see how far you came.' : 'Your distance is the score. Retest at the end of the plan to see how far you came.'}</p>}

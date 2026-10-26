@@ -154,6 +154,25 @@ create policy "members leave" on public.crew_members for delete using (user_id =
 drop policy if exists "push own" on public.push_subscriptions;
 create policy "push own" on public.push_subscriptions for all using (user_id = auth.uid()) with check (user_id = auth.uid());
 
+-- ---------- cheers between crew members ----------
+
+create table if not exists public.cheers (
+  id bigserial primary key,
+  from_user uuid not null references auth.users on delete cascade,
+  to_user uuid not null references auth.users on delete cascade,
+  session_id text not null,
+  title text,
+  seen boolean not null default false,
+  created_at timestamptz not null default now(),
+  unique (from_user, session_id)                -- one cheer per person per workout
+);
+alter table public.cheers enable row level security;
+-- you can see cheers you sent or got, and mark the ones you got as seen; the server adds them
+drop policy if exists "cheers read" on public.cheers;
+create policy "cheers read" on public.cheers for select using (to_user = auth.uid() or from_user = auth.uid());
+drop policy if exists "cheers seen" on public.cheers;
+create policy "cheers seen" on public.cheers for update using (to_user = auth.uid()) with check (to_user = auth.uid());
+
 -- ---------- reminders every 15 minutes (optional, needed for training-day reminders) ----------
 -- 1. Database → Extensions: enable pg_cron and pg_net.
 -- 2. Replace YOUR-APP and YOUR_CRON_SECRET below, then run these two lines on their own:

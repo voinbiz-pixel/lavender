@@ -12,15 +12,45 @@
   --safe-t: env(safe-area-inset-top, 0px);
   --safe-b: env(safe-area-inset-bottom, 0px);
   color-scheme: light;
+  /* the day's colours */
+  --t-train: #b7c8b3; --t-rest: #b4b5c8; --t-done: #c6b4be; --t-morning: #cfc6b4; --t-cardio: #b9c6cc;
+  /* the move figure */
+  --fig-far: rgba(14,14,14,.28); --fig-eqfar: rgba(14,14,14,.35); --fig-prop: rgba(14,14,14,.14); --fig-ground: rgba(14,14,14,.18);
+  /* flat fills inside glass */
+  --glass-fill: rgba(255,255,255,.5); --glass-edge: inset 0 1px 0 rgba(255,255,255,.8); --glass-track: rgba(14,14,14,.08); --ring-gap: rgba(255,255,255,.9);
+  --danger: #8a2b12;
+  --hi-mix: #fff 52%; --lo-mix: #000 20%; --lo2-mix: #000 12%;
 }
+
+/* Dark: the same rooms with the lights down. Each day keeps its hue, deep and quiet; ink turns to cream. */
+:root[data-theme=dark] {
+  color-scheme: dark;
+  --ink: #edece5;
+  --ink-2: rgba(237, 236, 229, 0.66);
+  --ink-3: rgba(237, 236, 229, 0.42);
+  --ink-4: rgba(237, 236, 229, 0.13);
+  --paper: #18181b;
+  --bg: #222a24;
+  --water: #6fa3ec;
+  --t-train: #222a24; --t-rest: #23242d; --t-done: #2c2328; --t-morning: #2d2922; --t-cardio: #212a2e;
+  --fig-far: rgba(237,236,229,.3); --fig-eqfar: rgba(237,236,229,.36); --fig-prop: rgba(237,236,229,.13); --fig-ground: rgba(237,236,229,.16);
+  --glass-fill: rgba(255,255,255,.08); --glass-edge: inset 0 1px 0 rgba(255,255,255,.1); --glass-track: rgba(255,255,255,.08); --ring-gap: #2a2a2e;
+  --danger: #f0a58a;
+  --hi-mix: #fff 7%; --lo-mix: #000 52%; --lo2-mix: #000 38%;
+  --rim: inset 0 1px 0.5px rgba(255,255,255,.4), inset 0 -1px 0.5px rgba(255,255,255,.12), inset 0 0 0 1px rgba(255,255,255,.1),
+         inset 2px 0 1.5px rgba(150,225,255,.14), inset -2px 0 1.5px rgba(255,160,210,.14),
+         inset 0 14px 22px -16px rgba(255,255,255,.22), inset 0 -16px 26px -20px rgba(255,255,255,.12);
+}
+/* switching theme eases everything at once, then gets out of the way */
+html.theming, html.theming * { transition: color .6s ease, background-color .6s ease, box-shadow .6s ease, fill .6s ease, stroke .6s ease !important; }
 
 /* Neumorphism: every surface is the day's one colour, lit from the top left.
    Raised things cast a light edge up-left and a soft shade down-right; pressed things sink in.
    Both states use the same four shadows in the same order, so a press animates smoothly. */
 .app, .screen {
-  --hi: color-mix(in srgb, var(--tone), #fff 52%);
-  --lo: color-mix(in srgb, var(--tone), #000 20%);
-  --lo-2: color-mix(in srgb, var(--tone), #000 12%);
+  --hi: color-mix(in srgb, var(--tone), var(--hi-mix));
+  --lo: color-mix(in srgb, var(--tone), var(--lo-mix));
+  --lo-2: color-mix(in srgb, var(--tone), var(--lo2-mix));
   --z: 0 0 0 transparent;
   --up: -7px -7px 16px var(--hi), 8px 8px 18px var(--lo), inset 0 0 0 transparent, inset 0 0 0 transparent;
   --up-s: -4px -4px 9px var(--hi), 4px 4px 10px var(--lo), inset 0 0 0 transparent, inset 0 0 0 transparent;
@@ -36,6 +66,11 @@ input, textarea { -webkit-user-select: text; user-select: text; font-size: max(1
 button { font: inherit; color: inherit; background: none; border: 0; padding: 0; margin: 0; cursor: pointer; }
 a { color: inherit; text-decoration: none; }
 #root { height: 100%; }
+/* the page itself never moves: only the lists inside it scroll */
+html, body { overscroll-behavior: none; }
+@media (max-width: 440px) { html, body { position: fixed; inset: 0; overflow: hidden; } }
+.app { touch-action: none; }
+.scroll, .scroll-y, .sheet-body { touch-action: pan-y; overscroll-behavior-y: contain; }
 :focus { outline: none; }
 :focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; }
 
@@ -139,16 +174,20 @@ a { color: inherit; text-decoration: none; }
   box-shadow: inset 0 1px 0.5px #fff, inset 0 -1px 0.5px rgba(255,255,255,.5), inset 0 0 0 1px rgba(255,255,255,.35), inset 2px 0 1.5px rgba(150,225,255,.3), inset -2px 0 1.5px rgba(255,160,210,.3), 0 4px 14px -4px rgba(0,0,0,.25); }
 
 .scrim { position: absolute; inset: 0; background: rgba(14, 14, 14, 0.26); z-index: 40; }
-.sheet { position: absolute; left: 0; right: 0; bottom: 0; top: calc(var(--safe-t) + 44px); z-index: 41; border-radius: 34px 34px 0 0; display: flex; flex-direction: column;
+.sheet { position: absolute; left: 0; right: 0; bottom: 0; max-height: calc(100% - var(--safe-t) - 44px); z-index: 41; border-radius: 34px 34px 0 0; display: flex; flex-direction: column;
   background: linear-gradient(180deg, rgba(255,255,255,.66), rgba(255,255,255,.56));
   -webkit-backdrop-filter: blur(26px) saturate(180%); backdrop-filter: blur(26px) saturate(180%);
   box-shadow: var(--rim), 0 -16px 40px rgba(0,0,0,.14); }
 .sheet .grab { width: 40px; height: 5px; border-radius: 3px; background: rgba(14, 14, 14, 0.2); margin: 10px auto 0; }
-.sheet-body { flex: 1; overflow-y: auto; padding: 8px 20px calc(var(--safe-b) + 40px); scrollbar-width: none; }
+.sheet-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 8px 20px calc(var(--safe-b) + 40px); scrollbar-width: none; }
 .sheet-body::-webkit-scrollbar { display: none; }
 /* inside glass: flat tints, never glass on glass and no neumorphic shadows */
 .sheet .list { background: rgba(255,255,255,.42); box-shadow: inset 0 1px 0 rgba(255,255,255,.7); }
 .sheet .li + .li { box-shadow: inset 0 1px 0 rgba(14,14,14,.07); }
+.sheet .tile:not([aria-checked=true]) { background: rgba(255,255,255,.5); box-shadow: inset 0 1px 0 rgba(255,255,255,.8); }
+.sheet .tile.down { background: rgba(255,255,255,.34); }
+.sheet .field { background: rgba(255,255,255,.55); box-shadow: inset 0 1px 3px rgba(14,14,14,.12); }
+.sheet .field:focus { box-shadow: inset 0 1px 3px rgba(14,14,14,.12), inset 0 0 0 2px var(--ink); }
 .sheet .pill.soft, .sheet .chip:not(.on) { background: rgba(255,255,255,.5); box-shadow: inset 0 1px 0 rgba(255,255,255,.8); }
 
 .screen { position: absolute; inset: 0; z-index: 30; display: flex; flex-direction: column; background: var(--tone); }
@@ -177,4 +216,26 @@ html.refract .tabbar.lg-on { background: linear-gradient(180deg, rgba(255,255,25
   .tabbar { background: color-mix(in srgb, var(--tone), #fff 45%); }
   .sheet { background: #f1f2ee; }
   .menu, .toast { background: #121212; }
+}
+
+/* ---------- dark glass ---------- */
+:root[data-theme=dark] .tabbar { background: linear-gradient(180deg, rgba(255,255,255,.12), rgba(255,255,255,.04) 55%, rgba(255,255,255,.07)); box-shadow: var(--rim), 0 10px 26px -10px rgba(0,0,0,.6); }
+html.refract[data-theme=dark] .tabbar.lg-on { background: linear-gradient(180deg, rgba(255,255,255,.1), rgba(255,255,255,.03) 55%, rgba(255,255,255,.06)); }
+:root[data-theme=dark] .tabbar .lens { background: linear-gradient(180deg, rgba(255,255,255,.2), rgba(255,255,255,.08)); box-shadow: inset 0 1px 0.5px rgba(255,255,255,.5), inset 0 -1px 0.5px rgba(255,255,255,.15), inset 0 0 0 1px rgba(255,255,255,.12), 0 4px 14px -4px rgba(0,0,0,.5); }
+:root[data-theme=dark] .lg::before { opacity: .35; }
+:root[data-theme=dark] .sheet { background: linear-gradient(180deg, rgba(44,44,48,.74), rgba(30,30,34,.7)); box-shadow: var(--rim), 0 -16px 40px rgba(0,0,0,.4); }
+:root[data-theme=dark] .sheet .grab { background: rgba(255,255,255,.24); }
+:root[data-theme=dark] .sheet .list, :root[data-theme=dark] .sheet .tile:not([aria-checked=true]) { background: rgba(255,255,255,.07); box-shadow: inset 0 1px 0 rgba(255,255,255,.08); }
+:root[data-theme=dark] .sheet .li + .li { box-shadow: inset 0 1px 0 rgba(255,255,255,.07); }
+:root[data-theme=dark] .sheet .pill.soft, :root[data-theme=dark] .sheet .chip:not(.on) { background: rgba(255,255,255,.08); box-shadow: inset 0 1px 0 rgba(255,255,255,.1); }
+:root[data-theme=dark] .sheet .field { background: rgba(255,255,255,.07); box-shadow: inset 0 1px 3px rgba(0,0,0,.4); }
+:root[data-theme=dark] .scrim { background: rgba(0,0,0,.45); }
+:root[data-theme=dark] .menu, :root[data-theme=dark] .toast { color: #edece5; background: linear-gradient(180deg, rgba(64,64,70,.7), rgba(44,44,50,.74)); }
+:root[data-theme=dark] .chip.on { box-shadow: 0 0 0 transparent, 0 0 0 transparent, inset 1px 1px 3px rgba(0,0,0,.25), inset -1px -1px 2px rgba(255,255,255,.4); }
+:root[data-theme=dark] .switch i { background: #edece5; }
+:root[data-theme=dark] .pill.ink { box-shadow: -5px -5px 12px var(--hi), 6px 6px 14px var(--lo), inset 0 1px 0 rgba(255,255,255,.5), inset 0 0 0 transparent; }
+@media (min-width: 441px) { :root[data-theme=dark] body { background: #101012 !important; } }
+@media (prefers-reduced-transparency: reduce) {
+  :root[data-theme=dark] .tabbar { background: color-mix(in srgb, var(--tone), #fff 10%); }
+  :root[data-theme=dark] .sheet { background: #232326; }
 }

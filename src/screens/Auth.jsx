@@ -9,6 +9,7 @@ export default function Auth({ onUser }) {
   const [pw, setPw] = useState('')
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
+  const invite = (() => { try { return localStorage.getItem('lavender:join') } catch { return null } })()
   const go = async () => {
     setBusy(true); setErr('')
     try { onUser(await signIn(email.trim(), pw)) } catch (e) { setErr(e.message || 'Could not sign in') } finally { setBusy(false) }
@@ -17,11 +18,11 @@ export default function Auth({ onUser }) {
     <div className="screen" style={{ padding: 'calc(var(--safe-t) + 90px) 20px 0' }}>
       <Mark size={96} />
       <h1 className="hero center" style={{ marginTop: 28 }}>Lavender</h1>
-      <p className="small center" style={{ marginTop: 8, fontSize: 15 }}>Sign in, or make an account with the same two fields.</p>
+      <p className="small center" style={{ marginTop: 8, fontSize: 15 }}>{invite ? 'You’re invited to a crew. Sign in, or make an account, to join.' : 'Sign in, or make an account with the same two fields.'}</p>
       <form className="stack" style={{ marginTop: 34, gap: 10 }} onSubmit={(e) => { e.preventDefault(); go() }}>
         <input className="field" type="email" autoComplete="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} aria-label="Email" />
         <input className="field" type="password" autoComplete="current-password" placeholder="Password" value={pw} onChange={(e) => setPw(e.target.value)} aria-label="Password" />
-        {err && <p className="small center" role="alert" style={{ color: '#8a2b12' }}>{err}</p>}
+        {err && <p className="small center" role="alert" style={{ color: 'var(--danger)' }}>{err}</p>}
         <Press type="submit" className="pill ink" style={{ marginTop: 6, opacity: busy ? 0.5 : 1 }} disabled={busy}>{busy ? 'One moment' : 'Continue'}</Press>
       </form>
     </div>

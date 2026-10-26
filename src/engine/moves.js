@@ -74,6 +74,7 @@ export const MOVES = {
   inverted_row: { props: [BAR(96, 126, 70)], frames: [S({ sh: [104, 103], hip: [70, 116], nf: [34, 128], ff: [31, 128], kn: [0, -1], kf: [0, -1], nh: [110, 72], fh: [108, 72], en: [1, 0], ef: [1, 0] }), S({ sh: [104, 82], hip: [70, 104], nf: [34, 128], ff: [31, 128], kn: [0, -1], kf: [0, -1], nh: [110, 72], fh: [108, 72], en: [-1, 1], ef: [-1, 1] })] },
   band_row: { eq: 'band:132,118', props: [MAT], frames: [S({ hip: [70, 124], sh: [72, 90], nf: [116, 126], ff: [112, 126], kn: [0, -1], kf: [0, -1], nh: [106, 102], fh: [104, 102], en: [0, 1], ef: [0, 1] }), S({ hip: [70, 124], sh: [70, 90], nf: [116, 126], ff: [112, 126], kn: [0, -1], kf: [0, -1], nh: [84, 106], fh: [82, 106], en: [-1, 0], ef: [-1, 0] })] },
   // vertical pull
+  prone_pulldown: { props: [MAT], frames: [S({ hip: [70, 123], sh: [102, 121], nf: [22, 126], ff: [20, 126], kn: [0, -1], kf: [0, -1], nh: [134, 116], fh: [132, 117], en: [0, -1], ef: [0, -1] }), S({ hip: [70, 123], sh: [102, 117], nf: [22, 126], ff: [20, 126], kn: [0, -1], kf: [0, -1], nh: [104, 106], fh: [102, 107], en: [-1, -1], ef: [-1, -1], hd: [0, -2] })] },
   pullup: { props: [BAR(56, 112, 22)], frames: [S({ sh: [82, 56], hip: [80, 90], nf: [70, 124], ff: [66, 122], kn: [-1, 0.3], kf: [-1, 0.3], nh: [86, 24], fh: [82, 24], en: [1, 0], ef: [1, 0] }), S({ sh: [82, 36], hip: [80, 70], nf: [70, 104], ff: [66, 102], kn: [-1, 0.3], kf: [-1, 0.3], nh: [86, 24], fh: [82, 24], en: [1, 1], ef: [1, 1] })] },
   chinup: { props: [BAR(56, 112, 22)], frames: [S({ sh: [82, 56], hip: [80, 90], nf: [70, 124], ff: [66, 122], kn: [-1, 0.3], kf: [-1, 0.3], nh: [86, 24], fh: [82, 24], en: [1, 0], ef: [1, 0] }), S({ sh: [82, 36], hip: [80, 70], nf: [70, 104], ff: [66, 102], kn: [-1, 0.3], kf: [-1, 0.3], nh: [86, 24], fh: [82, 24], en: [1, 1], ef: [1, 1] })] },
   band_pulldown: { eq: 'band:84,2', props: [MAT], frames: [S({ hip: [76, 102], sh: [78, 68], nf: [54, 126], ff: [50, 126], kn: [1, 1], kf: [1, 1], nh: [84, 34], fh: [80, 34], en: [-1, 0], ef: [-1, 0] }), S({ hip: [76, 102], sh: [78, 68], nf: [54, 126], ff: [50, 126], kn: [1, 1], kf: [1, 1], nh: [86, 64], fh: [82, 64], en: [-1, 1], ef: [-1, 1] })] },
@@ -128,10 +129,11 @@ export const MOVES = {
   curl_up: { props: [MAT], frames: [SUPF({ nf: [114, 126], kn: [0, -1], ff: [142, 125], kf: [0, -1], nh: [92, 122], fh: [90, 122], en: [0, 1], ef: [0, 1] }), SUPF({ sh: [64, 114], nf: [114, 126], kn: [0, -1], ff: [142, 125], kf: [0, -1], nh: [92, 122], fh: [90, 122], en: [0, 1], ef: [0, 1] })], slow: true },
   bicycle_crunch: { props: [MAT], frames: [SUPF({ sh: [64, 113], nf: [104, 98], kn: [1, -1], ff: [140, 112], kf: [0, -1], nh: [56, 104], fh: [58, 104], en: [1, -1], ef: [1, -1] }), SUPF({ sh: [64, 113], nf: [140, 112], kn: [0, -1], ff: [104, 98], kf: [1, -1], nh: [56, 104], fh: [58, 104], en: [1, -1], ef: [1, -1] })] },
   pallof_press: { eq: 'band:30,62', frames: [S({ nh: [94, 62], fh: [92, 62], en: [-1, 1], ef: [-1, 1] }), S({ nh: [112, 60], fh: [110, 60], en: [0, 1], ef: [0, 1] })], slow: true },
+  farmer_carry: { eq: 'db@h', fast: 0.62, frames: [S({ hip: [80, 84], sh: [81, 50], nf: [93, 128], ff: [68, 126], nh: [83, 87], fh: [78, 87] }), S({ hip: [80, 84], sh: [81, 50], nf: [68, 126], ff: [93, 128], nh: [83, 87], fh: [78, 87] })] },
   suitcase_hold: { eq: 'db@n', hold: true, frames: [S({ nh: [82, 84], fh: [78, 82] }), S({ nh: [82, 85], fh: [78, 82], sh: [80, 46] })] },
   glute_bridge: { props: [MAT], frames: [S({ sh: [44, 122], hip: [76, 124], nf: [104, 126], ff: [100, 126], kn: [0, -1], kf: [0, -1], nh: [70, 126], fh: [66, 126], en: [0, -1], ef: [0, -1] }), S({ sh: [44, 122], hip: [82, 104], nf: [104, 126], ff: [100, 126], kn: [0, -1], kf: [0, -1], nh: [70, 126], fh: [66, 126], en: [0, -1], ef: [0, -1] })] },
   // ---- conditioning ----
-  mountain_climber: { props: [MAT], fast: 0.34, frames: [PUSH([106, 104], [72, 112], [112, 128], [36, 128], { nf: [88, 122], kn: [1, 1] }), PUSH([106, 104], [72, 112], [112, 128], [36, 128], { ff: [88, 122], kf: [1, 1] })] },
+  mountain_climber: { props: [MAT], fast: 0.34, frames: [PUSH([106, 104], [72, 112], [112, 128], [36, 128], { nf: [86, 120], kn: [0.6, -1] }), PUSH([106, 104], [72, 112], [112, 128], [36, 128], { ff: [86, 120], kf: [0.6, -1] })] },
   high_knees: { fast: 0.3, frames: [S({ hip: [80, 79], sh: [81, 45], nf: [96, 100], kn: [1, 0], nh: [98, 62], fh: [70, 80], en: [-1, 1], ef: [-1, 0] }), S({ hip: [80, 79], sh: [81, 45], ff: [96, 100], kf: [1, 0], nh: [70, 80], fh: [98, 62], en: [-1, 0], ef: [-1, 1] })] },
   jumping_jack: { view: 'front', fast: 0.42, frames: [{ nh: [64, 84], fh: [96, 84], spread: 0 }, { nh: [54, 20], fh: [106, 20], spread: 16 }] },
   jump_rope: { fast: 0.32, frames: [S({ nh: [92, 82], fh: [70, 82], en: [0, 1], ef: [0, 1] }), S({ hip: [80, 75], sh: [80, 41], nf: [83, 122], ff: [77, 122], nh: [92, 76], fh: [70, 76], en: [0, 1], ef: [0, 1] })] },
@@ -147,39 +149,79 @@ export const MOVES = {
 }
 
 // ---------- geometry ----------
-function ik(a, b, l1, l2, hint) {
+// Two-bone IK with a soft reach: as a limb nears full length it slows into the lockout instead of
+// popping straight, and the bend side is passed in so a knee or elbow can never flip mid-move.
+function ik(a, b, l1, l2, side) {
   const dx = b[0] - a[0], dy = b[1] - a[1]
-  const d = Math.min(l1 + l2 - 0.01, Math.max(Math.abs(l1 - l2) + 0.01, Math.hypot(dx, dy)))
+  const L = l1 + l2, raw = Math.hypot(dx, dy) || 0.001
+  const soft = L * 0.94
+  let d = raw > soft ? soft + (L - soft) * (1 - Math.exp(-(raw - soft) / (L - soft))) : raw
+  d = Math.max(Math.abs(l1 - l2) + 0.01, Math.min(L - 0.001, d))
   const base = Math.atan2(dy, dx)
   const ang = Math.acos(Math.max(-1, Math.min(1, (l1 * l1 + d * d - l2 * l2) / (2 * l1 * d))))
-  const j1 = [a[0] + l1 * Math.cos(base + ang), a[1] + l1 * Math.sin(base + ang)]
-  const j2 = [a[0] + l1 * Math.cos(base - ang), a[1] + l1 * Math.sin(base - ang)]
-  const mid = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2]
-  const score = (j) => (j[0] - mid[0]) * hint[0] + (j[1] - mid[1]) * hint[1]
-  const j = score(j1) >= score(j2) ? j1 : j2
+  const j = [a[0] + l1 * Math.cos(base + side * ang), a[1] + l1 * Math.sin(base + side * ang)]
   const ex = b[0] - j[0], ey = b[1] - j[1], e = Math.hypot(ex, ey) || 1
   return [j, [j[0] + (ex / e) * l2, j[1] + (ey / e) * l2]]
+}
+// which way a limb bends in one key pose: toward its hint
+function sideOf(a, b, l1, l2, hint) {
+  const [p] = ik(a, b, l1, l2, 1), [q] = ik(a, b, l1, l2, -1)
+  const mid = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2]
+  const score = (j) => (j[0] - mid[0]) * hint[0] + (j[1] - mid[1]) * hint[1]
+  return score(p) >= score(q) ? 1 : -1
+}
+const angDiff = (x, y) => { let d = y - x; while (d > Math.PI) d -= 2 * Math.PI; while (d < -Math.PI) d += 2 * Math.PI; return d }
+// One limb between two key poses. When both poses bend the same way, the hand or foot travels on an
+// arc around the shoulder or hip (angle and reach interpolated, so arms swing instead of folding
+// through the body, and planted hands stay planted) and IK keeps that bend. When the bend changes
+// sides, the two bones swing through their own angles, so the joint passes smoothly through straight
+// instead of flipping; long swings go the same way round as the hand does.
+function limb(A, B, k, l1, l2, hA, hB, facing = true) {
+  const sA = sideOf(A.r, A.e, l1, l2, hA), sB = sideOf(B.r, B.e, l1, l2, hB)
+  const r = mix(A.r, B.r, k)
+  const va = [A.e[0] - A.r[0], A.e[1] - A.r[1]], vb = [B.e[0] - B.r[0], B.e[1] - B.r[1]]
+  const aA = Math.atan2(va[1], va[0]), aB = Math.atan2(vb[1], vb[0])
+  let turn = angDiff(aA, aB)
+  // a near half-turn could go either way: swing through the front, the way the figure faces
+  if (facing && Math.abs(turn) > 2.5 && Math.cos(aA + turn / 2) < 0) turn -= 2 * Math.PI * Math.sign(turn)
+  if (sA === sB) {
+    const ang = aA + turn * k, d = lerp(Math.hypot(...va), Math.hypot(...vb), k)
+    return ik(r, [r[0] + d * Math.cos(ang), r[1] + d * Math.sin(ang)], l1, l2, sA)
+  }
+  const [ja, ea] = ik(A.r, A.e, l1, l2, sA), [jb, eb] = ik(B.r, B.e, l1, l2, sB)
+  const way = (x, y) => { let d = angDiff(x, y); if (Math.abs(d) > 2.4 && Math.sign(d) !== Math.sign(turn)) d -= 2 * Math.PI * Math.sign(d); return d }
+  const t1a = Math.atan2(ja[1] - A.r[1], ja[0] - A.r[0]), t1b = Math.atan2(jb[1] - B.r[1], jb[0] - B.r[0])
+  const t2a = Math.atan2(ea[1] - ja[1], ea[0] - ja[0]), t2b = Math.atan2(eb[1] - jb[1], eb[0] - jb[0])
+  const t1 = t1a + way(t1a, t1b) * k, t2 = t2a + way(t2a, t2b) * k
+  const j = [r[0] + l1 * Math.cos(t1), r[1] + l1 * Math.sin(t1)]
+  return [j, [j[0] + l2 * Math.cos(t2), j[1] + l2 * Math.sin(t2)]]
 }
 
 const lerp = (a, b, t) => a + (b - a) * t
 function mix(A, B, t) {
-  if (Array.isArray(A)) return A.map((v, i) => mix(v, B[i], t))
+  if (Array.isArray(A)) return A.map((v, i) => mix(v, B?.[i] ?? v, t))
   if (typeof A === 'number') return lerp(A, B ?? A, t)
   return A
 }
+// strength moves: a smooth start and a smooth settle. Rhythmic moves (running, jacks): a pendulum.
 const ease = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2)
+const swing = (t) => (1 - Math.cos(Math.PI * t)) / 2
+const timing = (m) => ({ step: m.fast ? m.fast : m.slow ? 1.7 : 1.05, hold: m.fast ? 0 : m.hold ? 0.9 : 0.35 })
 
-// The pose at time t (seconds). Each step: 1 s of movement, then a short pause.
-export function poseAt(m, t) {
+// Where in the loop we are at time t (seconds): the two key poses either side, and how far between.
+export function phaseAt(m, t) {
   const f = m.frames
-  if (f.length === 1) return f[0]
-  const seq = f.length === 2 ? [0, 1] : [...f.keys()]
-  const step = m.fast ? m.fast : m.slow ? 1.7 : 1.05, hold = m.fast ? 0.02 : m.hold ? 0.9 : 0.35
-  const per = step + hold, n = seq.length
+  if (f.length === 1) return { a: f[0], b: f[0], k: 0 }
+  const n = f.length
+  const { step, hold } = timing(m)
+  const per = step + hold
   const ph = ((Math.max(0, t) || 0) % (per * n)) / per
-  const i = Math.min(n - 1, Math.max(0, Math.floor(ph))), local = ph - i
-  const a = f[seq[i]], b = f[seq[(i + 1) % n]]
-  const k = local < step / per ? ease(local / (step / per)) : 1
+  const i = Math.min(n - 1, Math.max(0, Math.floor(ph))), local = (ph - i) * per
+  const u = Math.min(1, local / step)
+  return { a: f[i], b: f[(i + 1) % n], k: m.fast ? swing(u) : ease(u) }
+}
+export function poseAt(m, t) {
+  const { a, b, k } = phaseAt(m, t)
   const out = {}
   for (const key of new Set([...Object.keys(a), ...Object.keys(b)])) out[key] = mix(a[key] ?? b[key], b[key] ?? a[key], k)
   return out
@@ -191,6 +233,7 @@ export function poseAt(m, t) {
 export function shapes(id, t = 0) {
   const m = MOVES[id]
   if (!m) return []
+  const { a: A, b: B, k } = phaseAt(m, t)
   const p = poseAt(m, t)
   const out = []
   const line = (a, b, w, tone) => out.push({ k: 'line', x1: a[0], y1: a[1], x2: b[0], y2: b[1], w, tone })
@@ -208,12 +251,15 @@ export function shapes(id, t = 0) {
       line([132, 120], [124, 66], 3.2, 'prop'); line([116, 66], [136, 62], 3.2, 'prop')
     }
   }
-  if (m.view === 'front') return out.concat(front(m, p))
+  if (m.view === 'front') return out.concat(front(m, p, A, B, k))
 
-  const [kn, an] = ik(p.hip, p.nf, LEN.thigh, LEN.shin, p.kn)
-  const [kf, af] = ik(p.hip, p.ff, LEN.thigh, LEN.shin, p.kf)
-  const [en, hn] = ik(p.sh, p.nh, LEN.up, LEN.fore, p.en)
-  const [ef, hf] = ik(p.sh, p.fh, LEN.up, LEN.fore, p.ef)
+  const Sa = S(A), Sb = S(B)
+  const leg = (end, hint) => limb({ r: Sa.hip, e: Sa[end] }, { r: Sb.hip, e: Sb[end] }, k, LEN.thigh, LEN.shin, Sa[hint], Sb[hint])
+  const arm = (end, hint) => limb({ r: Sa.sh, e: Sa[end] }, { r: Sb.sh, e: Sb[end] }, k, LEN.up, LEN.fore, Sa[hint], Sb[hint])
+  const [kn, an] = leg('nf', 'kn')
+  const [kf, af] = leg('ff', 'kf')
+  const [en, hn] = arm('nh', 'en')
+  const [ef, hf] = arm('fh', 'ef')
   const foot = (ank, toe) => toe ? toe : [ank[0] + 8, Math.min(G, ank[1] + 1)]
   // far limbs first
   line(p.hip, kf, 5, 'far'); line(kf, af, 5, 'far'); line(af, foot(af, p.toe && [p.toe[0] - 4, p.toe[1]]), 4, 'far')
@@ -248,7 +294,7 @@ function equipment(m, p, hn, hf, out, line) {
 }
 
 // Front view for raises and flies: the body faces you, arms open and close.
-function front(m, p) {
+function front(m, p, A, B, k) {
   const out = []
   const line = (a, b, w, tone) => out.push({ k: 'line', x1: a[0], y1: a[1], x2: b[0], y2: b[1], w, tone })
   const cx = 80, shY = m.bent ? 58 : 50, hipY = m.bent ? 84 : 84
@@ -258,9 +304,9 @@ function front(m, p) {
   line([cx - 8, hipY], [cx + 8, hipY], 6, 'near')
   line([cx - 7, hipY], sl, 6, 'near'); line([cx + 7, hipY], sr, 6, 'near'); line(sl, sr, 6, 'near')
   out.push({ k: 'circle', cx, cy: shY - 13, r: 6.8, tone: 'near' })
-  const bend = p.bend || 0
-  const [el, hl] = ik(sl, p.nh, LEN.up, LEN.fore, [-1, bend ? 1 : 0.2])
-  const [er, hr] = ik(sr, p.fh, LEN.up, LEN.fore, [1, bend ? 1 : 0.2])
+  const hint = (F, x) => [x, F.bend ? 1 : 0.2]
+  const [el, hl] = limb({ r: sl, e: A.nh }, { r: sl, e: B.nh }, k, LEN.up, LEN.fore, hint(A, -1), hint(B, -1), false)
+  const [er, hr] = limb({ r: sr, e: A.fh }, { r: sr, e: B.fh }, k, LEN.up, LEN.fore, hint(A, 1), hint(B, 1), false)
   if (m.eq?.startsWith('band')) {
     const anchor = m.eq.endsWith('feet') ? null : m.eq.split(':')[1].split(',').map(Number)
     line(anchor || [cx - 11, G], hl, 1.6, 'eqline'); line(anchor || [cx + 11, G], hr, 1.6, 'eqline')
@@ -271,7 +317,7 @@ function front(m, p) {
 }
 
 // A still that reads well in a list: the end of the movement.
-export const stillTime = (id) => { const m = MOVES[id]; if (!m) return 0; const step = m.fast ? m.fast : m.slow ? 1.7 : 1.05, hold = m.fast ? 0 : m.hold ? 0.9 : 0.35; return step + hold * 0.5 }
+export const stillTime = (id) => { const m = MOVES[id]; if (!m) return 0; const { step, hold } = timing(m); return step + hold * 0.5 }
 
 // The ten-minute rest-day routine: five moves, two minutes each.
 export const MOBILITY = [

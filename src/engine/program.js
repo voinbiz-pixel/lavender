@@ -1,6 +1,6 @@
 import { BY_ID, candidatesFor, poolFor } from './exercises.js'
 import { roundTo, nextUp, nextDown, stepsFor } from './loads.js'
-import { planWeek, planRir, weekSessions, weekLayout, coreSlots } from './plan.js'
+import { planWeek, planRir, weekSessions, weekLayout, coreSlots, finisherMinutes } from './plan.js'
 
 export const PALETTES = {
   jade: { name: 'Rare Jade', c: '#A6CFB8', d: '#1d2b24' },
@@ -105,26 +105,97 @@ function prescribe(ex, profile, mainSlot) {
   if (ex.unit === 'sec') rep = [20, 45]
   let sets = isMain ? xp.mainSets : xp.accSets
   if (isMain && profile.goal === 'strength') sets = Math.max(sets, 4)
-  const rest = ex.unit === 'sec' ? 45 : isMain ? (profile.goal === 'strength' ? 180 : 120) : ex.pattern === 'lunge' ? 90 : 75
+  // isolation moves recover quickly; compound accessories a little longer; lunges are hard work
+  const iso = ['chestiso', 'sidedelt', 'reardelt', 'biceps', 'triceps', 'calves', 'core', 'hamcurl'].includes(ex.pattern)
+  const rest = ex.unit === 'sec' ? 45 : isMain ? (profile.goal === 'strength' ? 180 : 120) : ex.pattern === 'lunge' ? 90 : iso ? 60 : 75
   return { rep, sets, rest, isMain }
 }
 
-export const estMinutes = (slots) => Math.round(slots.reduce((t, s) => t + s.sets * (s.rest + 45), 0) / 60) + 6
+// Minutes a session takes: each set about 45 s of work plus its rest. Two moves done back and forth
+// (a pair) share one rest per round, since each muscle rests while the other works.
+const SET_S = 45
+export function estMinutes(slots) {
+  let t = 0
+  const seen = new Set()
+  for (const s of slots) {
+    const b = s.pair ? slots.find((x) => x !== s && x.pair === s.pair) : null
+    if (b) {
+      if (seen.has(s.pair)) continue
+      seen.add(s.pair)
+      t += Math.max(s.sets, b.sets) * (2 * SET_S + 20 + Math.max(60, Math.max(s.rest, b.rest) - 30))
+    } else t += s.sets * (s.rest + SET_S)
+  }
+  return Math.round(t / 60) + 6
+}
+
+// Pairs: when time is short, moves that share no muscle are done back and forth instead of being cut.
+// Accessories pair first, then the main lifts (a press with a pull). Two heavy leg lifts never pair.
+const LOWER = ['squat', 'hinge', 'lunge', 'hipext']
+function canPair(a, b) {
+  if (a.pair || b.pair) return false
+  // core moves circuit well with each other and with small accessories
+  if (a.core || b.core) return (a.core && b.core) || (!a.isMain && !b.isMain && a.pattern !== 'core' && b.pattern !== 'core')
+  const A = groupCredit(BY_ID[a.exerciseId]), B = groupCredit(BY_ID[b.exerciseId])
+  if (Object.keys(A).some((k) => k in B)) return false
+  if (LOWER.includes(a.pattern) && LOWER.includes(b.pattern)) return false
+  return a.isMain === b.isMain
+}
+// Fit a list of slots into `cap` minutes, in order of what costs least: pair what can be paired, take
+// accessories down to two sets, drop accessories from the end, then take the main lifts to two sets.
+// Core work added by a plan is never dropped; `floor` counts the lifting moves that always stay.
+export function fitSlots(slots, cap, floor) {
+  let out = slots.map((x) => ({ ...x }))
+  const over = () => estMinutes(out) > cap
+  const pairPass = (main) => {
+    for (let i = out.length - 1; i >= 0 && over(); i--) {
+      const a = out[i]
+      if (a.isMain !== main || a.pair) continue
+      for (let j = i - 1; j >= 0; j--) {
+        if (canPair(out[j], a)) { const id = `${out[j].id}+${a.id}`; out[j].pair = id; a.pair = id; break }
+      }
+    }
+  }
+  const fewer = (pick) => { for (let i = out.length - 1; i >= 0 && over(); i--) if (pick(out[i]) && out[i].sets > 2) out[i].sets = 2 }
+  if (over()) pairPass(false)
+  if (over()) pairPass(true)
+  if (over()) fewer((x) => !x.isMain)
+  while (over() && out.filter((x) => !x.core).length > floor) {
+    const i = out.map((x) => !!x.core).lastIndexOf(false)
+    const gone = out[i]
+    out.splice(i, 1)
+    if (gone.pair) out = out.map((x) => (x.pair === gone.pair ? { ...x, pair: null } : x))
+  }
+  if (over()) fewer((x) => x.isMain)
+  // partners sit next to each other, in the place of the first
+  const order = []
+  for (const x of out) {
+    if (order.includes(x)) continue
+    order.push(x)
+    const m = x.pair && out.find((y) => y !== x && y.pair === x.pair)
+    if (m) order.push(m)
+  }
+  return order
+}
 
 export function generateProgram(profile, block = 0, prev = null) {
   const days = SPLITS[Math.min(6, Math.max(2, profile.daysPerWeek || 3))]
   const out = days.map((d, i) => {
     let slots = []
     d.slots.forEach((s, j) => {
-      const cands = candidatesFor(s.pattern, profile.equipment, profile.easyOn)
+      // moves you never want are left out (unless nothing else fits); moves you always want come first
+      const avoid = profile.avoid || [], keep = profile.keep || []
+      const ok = (list) => { const f = list.filter((c) => !avoid.includes(c.id)); return f.length ? f : list }
+      const cands = ok(candidatesFor(s.pattern, profile.equipment, profile.easyOn))
       if (!cands.length) return
-      const pool = poolFor(s.pattern, profile.equipment, profile.easyOn)
+      const pool = ok(poolFor(s.pattern, profile.equipment, profile.easyOn))
+      const kept = cands.find((c) => keep.includes(c.id) && !slots.some((x) => x.exerciseId === c.id))
       const mainSlot = j < 4
       // keep main lifts stable across blocks so progress carries; rotate accessories
       const prevSlot = prev?.days?.find((pd) => pd.key === d.key)?.slots?.find((ps) => ps.pattern === s.pattern && ps.variant === s.variant)
       let ex
       // a locked move, or a bodyweight move that has moved along its ladder, stays put
-      if ((prevSlot?.locked || prevSlot?.ladder) && (prevSlot.ladder ? BY_ID[prevSlot.exerciseId]?.requires.every((r) => profile.equipment?.[r]?.on) : cands.some((c) => c.id === prevSlot.exerciseId))) ex = BY_ID[prevSlot.exerciseId]
+      if (kept) ex = kept
+      else if ((prevSlot?.locked || prevSlot?.ladder) && !avoid.includes(prevSlot.exerciseId) && (prevSlot.ladder ? BY_ID[prevSlot.exerciseId]?.requires.every((r) => profile.equipment?.[r]?.on) : cands.some((c) => c.id === prevSlot.exerciseId))) ex = BY_ID[prevSlot.exerciseId]
       else {
         const rot = mainSlot ? 0 : block
         ex = pool[(s.variant + rot) % pool.length]
@@ -138,7 +209,7 @@ export function generateProgram(profile, block = 0, prev = null) {
     // fit the session length: trim from the end if over, add sets if there is time to spare
     const cap = profile.sessionMinutes || 60
     const floor = (profile.daysPerWeek || 3) <= 3 ? 4 : 3 // a full-body day keeps at least four moves
-    while (slots.length > floor && estMinutes(slots) > cap) slots = slots.slice(0, -1)
+    slots = fitSlots(slots, cap, floor)
     const maxMain = profile.goal === 'strength' ? 5 : 4
     for (let pass = 0; pass < 3; pass++) {
       for (const s of [...slots.filter((x) => x.isMain), ...slots.filter((x) => !x.isMain)]) {
@@ -214,7 +285,7 @@ const START_LB = {
   db_chest_row: 25, db_row: 35, bb_row: 75, db_row_standing: 25, db_pullover: 25, db_kneel_row_high: 15,
   db_bulgarian: 15, db_reverse_lunge: 20, db_step_up: 20, db_hip_thrust: 45, bb_hip_thrust: 95, db_ham_curl: 15,
   db_fly: 15, db_lateral: 10, db_rear_fly: 10, db_curl: 17.5, db_incline_curl: 12.5, db_hammer: 20,
-  db_oh_ext: 25, db_skull: 15, calf_raise: 20,
+  db_oh_ext: 25, db_skull: 15, calf_raise: 20, farmer_carry: 30, suitcase_hold: 25,
 }
 export function startingLoad(ex, profile) {
   if (!['db', 'bb', 'kb'].includes(ex.load)) return ex.load === 'band' ? 1 : 0
@@ -331,6 +402,7 @@ export const LADDERS = [
   ['glute_bridge', 'sl_glute_bridge'],
   ['towel_row', 'inverted_row'],
   ['towel_row', 'chinup', 'pullup'],
+  ['prone_pulldown', 'chinup', 'pullup'],
   ['dead_bug', 'plank', 'hollow_hold'],
   ['curl_up', 'reverse_crunch', 'hanging_knee'],
   ['bird_dog', 'side_plank'],
@@ -413,23 +485,20 @@ export function recommend(state, now = new Date()) {
 export function sessionSlots(state, dayIdx, { short = false, desc = null } = {}) {
   const p = state.program
   const day = p.days[dayIdx]
-  let slots = day.slots
-  if (short) slots = slots.slice(0, Math.max(3, Math.ceil(slots.length * 0.6)))
-  // make room in this session for what the plan adds to it (a finisher, a core block): drop accessories from the end
-  if (desc && (desc.finisher || desc.core)) {
-    const extra = (desc.finisher ? 15 : 0) + (desc.core ? (state.plan?.goal === 'core' ? 10 : 7) : 0)
-    const cap = (state.profile.sessionMinutes || 45) - extra
-    const floor = p.days.length <= 3 ? 4 : 3
-    while (slots.length > floor && estMinutes(slots) > cap) slots = slots.slice(0, -1)
-  }
+  const floor = short ? 3 : p.days.length <= 3 ? 4 : 3
+  const minutes = state.profile.sessionMinutes || 45
+  // the core block a plan adds: rotated so every session covers different ground
+  let core = []
   if (desc?.core && state.plan) {
     const pw = planWeek(state.plan)
     const ok = (id) => { const ex = BY_ID[id]; return ex && ex.requires.every((r) => state.profile.equipment?.[r]?.on) && !ex.stress.some((x) => (state.profile.easyOn || []).includes(x)) }
-    const have = new Set(slots.map((x) => x.exerciseId))
-    const core = coreSlots(state, desc, pw, 0, ok).filter((x) => !have.has(x.exerciseId)).map((x) => ({ ...x, rep: BY_ID[x.exerciseId].unit === 'sec' ? [20, 45] : [8, 15] }))
-    slots = [...slots.filter((x) => !(short && x.pattern === 'core')), ...core]
+    const have = new Set(day.slots.map((x) => x.exerciseId))
+    core = coreSlots(state, desc, pw, 0, ok).filter((x) => !have.has(x.exerciseId)).map((x) => ({ ...x, rep: BY_ID[x.exerciseId].unit === 'sec' ? [20, 45] : [8, 15] }))
   }
-  return slots
+  // short on time: about two thirds of the usual length. A finisher takes its minutes out of the session.
+  const cap = (short ? Math.max(20, Math.round(minutes * 0.65)) : minutes) - (desc?.finisher ? finisherMinutes(minutes) : 0)
+  const lift = day.slots.filter((x) => !(core.length && x.pattern === 'core'))
+  return (short || core.length || desc?.finisher) ? fitSlots([...lift, ...core], cap, floor) : day.slots
 }
 
 // What today's plan asks for, if a plan is running
@@ -487,6 +556,7 @@ export function buildSession(state, dayIdx, week, { short = false, easy = false,
     const ex = BY_ID[slot.exerciseId]
     const sg = suggest(state, slot, week, deload)
     if (easy) sg.rir = (sg.rir ?? 2) + 1
+    if (energy === 'tired') sg.rir = (sg.rir ?? 2) + 1
     const work = Array.from({ length: adjustSets(slot, sg.sets, { short, easy, energy }) }, (_, k) => ({
 
       id: uid(), kind: 'work', weight: sg.weight, reps: null, target: sg.reps[k] ?? sg.reps[0], rir: null, done: false,
@@ -494,7 +564,7 @@ export function buildSession(state, dayIdx, week, { short = false, easy = false,
     const wu = i === 0 || (slot.isMain && i < 2) ? warmups(ex, sg.weight, state.profile.equipment).map((w) => ({ id: uid(), kind: 'warmup', weight: w.weight, reps: null, target: w.reps, done: false })) : []
     return {
       id: uid(), slotId: slot.id, exerciseId: ex.id, pattern: slot.pattern, rep: slot.rep, rest: slot.rest,
-      isMain: slot.isMain, core: !!slot.core, targetRir: sg.rir, note: sg.note, why: sg.why, kind: sg.kind, sets: [...wu, ...work], memo: '',
+      isMain: slot.isMain, core: !!slot.core, pair: slot.pair || null, targetRir: sg.rir, note: sg.note, why: sg.why, kind: sg.kind, sets: [...wu, ...work], memo: '',
     }
   })
   return {
@@ -505,5 +575,6 @@ export function buildSession(state, dayIdx, week, { short = false, easy = false,
 }
 
 export function swapOptions(state, pattern, currentId) {
-  return candidatesFor(pattern, state.profile.equipment, state.profile.easyOn).filter((e) => e.id !== currentId)
+  const avoid = state.profile.avoid || []
+  return candidatesFor(pattern, state.profile.equipment, state.profile.easyOn).filter((e) => e.id !== currentId && !avoid.includes(e.id))
 }

@@ -92,7 +92,7 @@ export default function Calendar() {
           </motion.div>
         </AnimatePresence>
       </div>
-      <p className="small center" style={{ marginTop: 12 }}>Dark: trained · Ring: planned · Pressed in: stretched<br />Dot: morning · Blue: water target met</p>
+      <p className="small center" style={{ marginTop: 12 }}>Solid: trained · Ring: planned · Pressed in: stretched<br />Dot: morning · Blue: water target met</p>
 
       <div className="tile" style={{ marginTop: 14, display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', padding: '16px 6px' }}>
         {(offset > 0

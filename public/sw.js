@@ -1,5 +1,5 @@
 // Lavender service worker: push notifications + an offline shell.
-const CACHE = 'lavender-v2'
+const CACHE = 'lavender-v4'
 
 // On install, save the whole app (the page plus every script and style it loads),
 // so it opens with no connection from the very first time it is added.

@@ -24,10 +24,10 @@ export const initialState = () => ({
     experience: 'some', daysPerWeek: 4, trainDays: [1, 2, 4, 5],
     sessionMinutes: 45, equipment: defaultEquipment('lb'), easyOn: [], restDefault: 90,
     morning: { on: true, days: [1, 2, 3, 4, 5], time: '07:00', until: 11 },
-    reminder: { on: true, time: '18:00' }, waterNudge: true,
+    reminder: { on: true, time: '18:00' }, waterNudge: true, avatar: { leaf: 'bud', color: 'lavender' },
     onboarded: false, tz: Intl.DateTimeFormat().resolvedOptions().timeZone,
   },
-  settings: { sound: true, haptics: true },
+  settings: { sound: true, haptics: true, theme: 'auto' },
   program: null,
   plan: null, // { id, goal, focus, weeks, level, start }
   cardio: { speeds: {} },
@@ -35,6 +35,7 @@ export const initialState = () => ({
   flows: {}, // { 'Sun Oct 25 2026': { morning: true, stretch: 'hips' } }
   water: [], // [{ id, at, ml }]
   bodyweight: [],
+  exNotes: {}, // { exerciseId: 'seat on 4' }
   achievements: {},
   updatedAt: new Date().toISOString(),
 })

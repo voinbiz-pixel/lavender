@@ -46,22 +46,33 @@ export const FLOWS = [
   {
     key: 'unwind', name: 'Wind down', steps: [
       M('child_pose', 'Child’s pose', 90, 'Let everything go heavy.'),
-      M('cat_cow', 'Cat and cow', 60, 'Small, easy movements.'),
-      M('hip_flexor', 'Hip flexor stretch', 90, 'Gentle. Switch sides halfway.', true),
-      M('forward_fold', 'Forward fold', 90, 'Hang, breathe, no effort.'),
+      M('thread_needle', 'Thread the needle', 90, 'Slide one arm under, rest the shoulder down. Switch halfway.', true),
+      M('cobra', 'Cobra', 60, 'Hips down, press up gently, shoulders away from the ears.'),
+      M('down_dog', 'Down dog', 60, 'Long spine, heels sink toward the floor, pedal the feet.'),
+      M('forward_fold', 'Forward fold', 60, 'Hang, breathe, no effort.'),
       { type: 'breathe', secs: 120 },
     ],
   },
 ]
 
-export const WARMUP = [
-  M('cat_cow', 'Cat and cow', 40, 'Loosen the spine.'),
-  M('bw_squat', 'Slow squat', 40, 'Easy, full range.'),
-]
-export const COOLDOWN = [
-  M('forward_fold', 'Forward fold', 45, 'Hang heavy, breathe out slowly.'),
-  M('child_pose', 'Child’s pose', 45, 'Sit back and let the heart rate settle.'),
-]
+// Warm-ups are built for the day: raise the pulse, then open up what the day will load.
+// About four minutes; a short session keeps the first two moves.
+const PULSE = M('jumping_jack', 'Jumping jacks', 40, 'Light and springy. Just get warm.')
+const WARM = {
+  upper: [PULSE, M('cat_cow', 'Cat and cow', 40, 'Loosen the spine.'), M('prone_ytw', 'Y-T-W raises', 45, 'Face down, thumbs up. Hold each letter a breath.'), M('thread_needle', 'Thread the needle', 50, 'Open the upper back. Switch sides halfway.', true)],
+  lower: [PULSE, M('glute_bridge', 'Glute bridge', 40, 'Squeeze at the top, lower slowly.'), M('world_greatest', 'World’s greatest stretch', 60, 'Lunge, hand down, reach up. Switch sides halfway.', true), M('bw_squat', 'Slow squat', 40, 'Easy, full range.')],
+  full: [PULSE, M('world_greatest', 'World’s greatest stretch', 60, 'Lunge, hand down, reach up. Switch sides halfway.', true), M('bw_squat', 'Slow squat', 40, 'Easy, full range.'), M('prone_ytw', 'Y-T-W raises', 40, 'Face down, thumbs up. Hold each letter a breath.')],
+}
+const COOL = {
+  upper: [M('child_pose', 'Child’s pose', 45, 'Sit back, arms long, let the shoulders open.'), M('thread_needle', 'Thread the needle', 50, 'Slow and easy. Switch sides halfway.', true)],
+  lower: [M('hip_flexor', 'Hip flexor stretch', 50, 'Tuck your tail, shift forward. Switch sides halfway.', true), M('forward_fold', 'Forward fold', 45, 'Hang heavy, breathe out slowly.')],
+  full: [M('forward_fold', 'Forward fold', 45, 'Hang heavy, breathe out slowly.'), M('child_pose', 'Child’s pose', 45, 'Sit back and let the heart rate settle.')],
+}
+const kindOf = (focus = '') => (/upper|push|pull/i.test(focus) ? 'upper' : /lower|legs/i.test(focus) ? 'lower' : 'full')
+export const warmupFor = (focus, short) => (short ? WARM[kindOf(focus)].slice(0, 2) : WARM[kindOf(focus)])
+export const cooldownFor = (focus, short) => (short ? COOL[kindOf(focus)].slice(0, 1) : COOL[kindOf(focus)])
+export const WARMUP = WARM.full
+export const COOLDOWN = COOL.full
 
 export const stepSecs = (s) => (s.type === 'water' ? 20 : s.secs || 0)
 export const flowMinutes = (steps) => Math.max(1, Math.round(steps.reduce((t, s) => t + stepSecs(s) + 5, 0) / 60))

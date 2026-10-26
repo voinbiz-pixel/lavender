@@ -124,7 +124,7 @@ export default function Onboarding() {
       </div>
       <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
         <AnimatePresence mode="popLayout" initial={false} custom={dir}>
-          <motion.div key={step.key} custom={dir} style={{ position: 'absolute', inset: 0, padding: '0 20px', overflowY: 'auto', scrollbarWidth: 'none', WebkitMaskImage: 'linear-gradient(180deg, #000 calc(100% - 48px), transparent)', maskImage: 'linear-gradient(180deg, #000 calc(100% - 48px), transparent)' }}
+          <motion.div key={step.key} custom={dir} className="scroll-y" style={{ position: 'absolute', inset: 0, padding: '0 20px', overflowY: 'auto', scrollbarWidth: 'none' }}
             variants={{ in: (d) => ({ opacity: 0, x: 40 * d }), on: { opacity: 1, x: 0 }, out: (d) => ({ opacity: 0, x: -40 * d }) }}
             initial="in" animate="on" exit="out" transition={spring}>
             {step.title && <h1 className="title center" style={{ marginTop: 56, marginBottom: 30 }}>{step.title}</h1>}

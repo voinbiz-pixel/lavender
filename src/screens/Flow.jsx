@@ -1,12 +1,13 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { flowByKey, flowMinutes, stepSecs } from '../engine/routines.js'
+import { MOVE_INFO, FLOW_PURPOSE } from '../engine/purpose.js'
 import { markFlow } from '../lib/store.js'
 import { addWater, glassMl } from '../lib/actions.js'
 import { Press, Icon, Figure, fmtClock, spring, Opener, useCompact } from '../ui/kit.jsx'
 import { haptic, sound } from '../lib/feedback.js'
 
-export const FLOW_TONE = { morning: '#CFC6B4', rest: '#B4B5C8' }
+export const FLOW_TONE = { morning: 'var(--t-morning)', rest: 'var(--t-rest)' }
 
 // A full-screen guided routine: one step at a time, the figure looping, a clock that runs down.
 export default function Flow({ flowKey, origin, onClose }) {
@@ -28,11 +29,15 @@ export default function Flow({ flowKey, origin, onClose }) {
             <Fade key="intro">
               <Stage
                 head={<Head title={morning ? 'Morning routine' : flow.name} sub={`${morning ? 'Before work · ' : ''}${flowMinutes(flow.steps)} min · ${flow.steps.length} steps`} big />}
+                scroll
                 foot={<Press className="pill ink" onClick={() => setStarted(true)}>Begin</Press>}>
-                <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'flex-end', gap: 6 }} aria-hidden>
-                  {flow.steps.map((s, k) => (
-                    <motion.span key={k} className="well" initial={{ scaleY: 0 }} animate={{ scaleY: 1 }} transition={{ ...spring, delay: 0.04 * k }}
-                      style={{ flex: 1, maxWidth: 44, height: Math.round((compact ? 40 : 60) + Math.min(120, stepSecs(s)) * (compact ? 1.1 : 1.6)), borderRadius: 22, display: 'block', transformOrigin: '50% 100%' }} />
+                <p className="center" style={{ margin: '0 auto 18px', maxWidth: 290, font: '600 16px/1.35 var(--font)', textWrap: 'balance' }}>{FLOW_PURPOSE[flow.key]}</p>
+                <div className="list">
+                  {flow.steps.map((st, k) => (
+                    <motion.div key={k} className="li" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ ...spring, delay: 0.04 * k }}>
+                      <span className="t">{st.type === 'water' ? 'A glass of water' : st.type === 'breathe' ? 'Breathe' : st.name}</span>
+                      <span className="s">{st.type === 'water' ? 'Rehydrates you after the night' : st.type === 'breathe' ? 'Slows your heart and settles you' : MOVE_INFO[st.id]?.does || st.cue}</span>
+                    </motion.div>
                   ))}
                 </div>
               </Stage>
@@ -94,7 +99,7 @@ export function Stage({ head, children, foot, row, scroll }) {
 export function Head({ title, sub, big, kicker }) {
   return (
     <div className="center">
-      {kicker && <div className="kicker" style={{ marginBottom: 4 }}>{kicker}</div>}
+      {kicker && <div className="kicker" style={{ margin: '0 auto 6px', maxWidth: 300, textWrap: 'balance' }}>{kicker}</div>}
       <h1 className={big ? 'hero' : 'title'}>{title}</h1>
       {sub && <div className="small" style={{ marginTop: 8, fontSize: 15 }}>{sub}</div>}
     </div>
@@ -103,7 +108,8 @@ export function Head({ title, sub, big, kicker }) {
 
 // One timed step: a move, a glass of water, or a minute of breathing.
 // The clock waits for you: the move loops so you can learn it, and the countdown starts when you tap Start.
-export function TimedStep({ step, onDone, first, last }) {
+export function TimedStep({ step, onDone, first, last, caption }) {
+  const info = MOVE_INFO[step.id]
   const total = stepSecs(step)
   const compact = useCompact()
   const [left, setLeft] = useState(total)
@@ -156,7 +162,7 @@ export function TimedStep({ step, onDone, first, last }) {
   const side = step.sides ? (!running ? 'Both sides, switch halfway' : left > total / 2 ? 'First side' : 'Second side, switch over') : null
   const size = compact ? 210 : 280
   return (
-    <Stage head={<Head title={breathe ? 'Breathe' : step.name} sub={breathe ? 'Four seconds in, four seconds out' : side || (!running ? 'Watch the move, then start' : last ? 'Last one' : ' ')} />} row
+    <Stage head={<Head kicker={caption} title={breathe ? 'Breathe' : step.name} sub={breathe ? 'Four seconds in, four seconds out. Calms you down' : running && side ? side : info?.does || side || (!running ? 'Watch the move, then start' : ' ')} />} row
       foot={running
         ? <><Press className="pill soft" onClick={togglePause}>{paused ? 'Resume' : 'Pause'}</Press><Press className="pill ink" onClick={onDone}>{last ? 'Finish' : 'Next'}</Press></>
         : <><Press className="pill soft" onClick={onDone}>Skip</Press><Press className="pill ink" onClick={start}>Start</Press></>}>
@@ -170,6 +176,7 @@ export function TimedStep({ step, onDone, first, last }) {
         ) : <Figure id={step.id} size={size} playing={!paused} />}
       </div>
       {!breathe && <p className="small center" style={{ margin: '10px auto 0', maxWidth: 300, fontSize: 15 }}>{step.cue}</p>}
+      {!breathe && info?.feel && <p className="center" style={{ margin: '6px auto 0', maxWidth: 300, font: '600 14px/1.35 var(--font)', textWrap: 'balance' }}>Feel it: {info.feel.charAt(0).toLowerCase() + info.feel.slice(1)}</p>}
       <div className="big center" role="timer" aria-live="off" style={{ marginTop: compact ? 14 : 22, fontSize: compact ? 44 : 52, opacity: paused || !running ? 0.4 : 1, transition: 'opacity 0.42s' }}>{fmtClock(left)}</div>
     </Stage>
   )

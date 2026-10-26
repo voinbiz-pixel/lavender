@@ -1,9 +1,11 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { AnimatePresence, MotionConfig, motion, useMotionValue, useVelocity, useTransform, animate } from 'framer-motion'
-import { useStore, attachUser, getState } from './lib/store.js'
-import { cloudEnabled, getUser, supa } from './lib/cloud.js'
+import { useStore, attachUser, getState, currentUser } from './lib/store.js'
+import { cloudEnabled, getUser, supa, crewInfo, joinCrew, takeCheers } from './lib/cloud.js'
+import { joinLive } from './lib/live.js'
 import { activeSession, doneToday } from './lib/actions.js'
-import { ToastHost, Icon, dur } from './ui/kit.jsx'
+import { ToastHost, Icon, dur, toast } from './ui/kit.jsx'
+import { ExerciseHost } from './ui/explain.jsx'
 import { startLiquid } from './ui/liquid.js'
 import { haptic } from './lib/feedback.js'
 import Today from './screens/Today.jsx'
@@ -11,6 +13,7 @@ import Calendar from './screens/Calendar.jsx'
 import Session from './screens/Session.jsx'
 import Flow from './screens/Flow.jsx'
 import Cardio from './screens/Cardio.jsx'
+import Recap from './screens/Recap.jsx'
 import Progress from './screens/Progress.jsx'
 import You from './screens/You.jsx'
 import Onboarding from './screens/Onboarding.jsx'
@@ -22,7 +25,9 @@ const CalendarM = React.memo(Calendar)
 const ProgressM = React.memo(Progress)
 const YouM = React.memo(You)
 
-export const TONES = { train: '#B7C8B3', rest: '#B4B5C8', done: '#C6B4BE', morning: '#CFC6B4' }
+// The day's colour, as CSS variables so light and dark each have their own (see styles.css)
+export const TONES = { train: 'var(--t-train)', rest: 'var(--t-rest)', done: 'var(--t-done)', morning: 'var(--t-morning)' }
+const TONE_HEX = { light: { train: '#B7C8B3', rest: '#B4B5C8', done: '#C6B4BE', morning: '#CFC6B4' }, dark: { train: '#222A24', rest: '#23242D', done: '#2C2328', morning: '#2D2922' } }
 const TABS = [
   { id: 'today', label: 'Today', icon: 'today' },
   { id: 'calendar', label: 'Calendar', icon: 'days' },
@@ -30,11 +35,36 @@ const TABS = [
   { id: 'you', label: 'You', icon: 'you' },
 ]
 
+// Light, dark, or the phone's own setting. The change eases over half a second instead of flashing.
+function useTheme(pref) {
+  const q = typeof matchMedia !== 'undefined' ? matchMedia('(prefers-color-scheme: dark)') : null
+  const [sys, setSys] = useState(() => (q?.matches ? 'dark' : 'light'))
+  useEffect(() => { if (!q) return; const f = () => setSys(q.matches ? 'dark' : 'light'); q.addEventListener?.('change', f); return () => q.removeEventListener?.('change', f) }, [])
+  const theme = pref === 'auto' ? sys : pref
+  const first = useRef(true)
+  useLayoutEffect(() => {
+    const el = document.documentElement
+    if (!first.current) { el.classList.add('theming'); clearTimeout(useTheme.t); useTheme.t = setTimeout(() => el.classList.remove('theming'), 700) }
+    first.current = false
+    el.dataset.theme = theme
+    el.style.colorScheme = theme
+  }, [theme])
+  return theme
+}
+
 export function toneOf(state, now = new Date()) {
   if (activeSession(state)) return 'train'
   if (doneToday(state, now)) return 'done'
   return state.profile.trainDays.includes(now.getDay()) ? 'train' : 'rest'
 }
+
+// An invite link (lavender.app/join/CODE) is remembered until you're signed in and set up.
+const JOIN_KEY = 'lavender:join'
+if (typeof location !== 'undefined') {
+  const m = location.pathname.match(/^\/join\/([A-Za-z0-9]{4,8})\/?$/)
+  if (m) { try { localStorage.setItem(JOIN_KEY, m[1].toUpperCase()) } catch {} history.replaceState(null, '', '/') }
+}
+export const pendingInvite = () => { try { return localStorage.getItem(JOIN_KEY) } catch { return null } }
 
 export default function App() {
   const state = useStore()
@@ -46,9 +76,12 @@ export default function App() {
     session: (origin) => setScreen({ kind: 'session', origin }),
     flow: (key, origin) => setScreen({ kind: 'flow', key, origin }),
     cardio: (desc, origin) => setScreen({ kind: 'cardio', desc, origin }),
+    recap: (origin) => setScreen({ kind: 'recap', origin }),
     calendar: () => setTab('calendar'),
   }), [])
   useEffect(() => { setSeen((x) => (x[tab] ? x : { ...x, [tab]: true })) }, [tab])
+  // after a quiet update, say so once
+  useEffect(() => { try { if (sessionStorage.getItem('lavender:updated')) { sessionStorage.removeItem('lavender:updated'); setTimeout(() => toast('Updated'), 900) } } catch {} }, [])
   // once Today has settled, quietly build the other tabs one at a time, so the first visit is instant too
   const ready = authed !== 'checking' && authed !== 'out' && state.profile.onboarded
   useEffect(() => {
@@ -68,6 +101,30 @@ export default function App() {
     return () => data.subscription.unsubscribe()
   }, [])
 
+  // the crew, once signed in: join an invite from a link, go live with the crew, and show cheers you got
+  useEffect(() => {
+    if (!cloudEnabled || authed !== 'in' || !state.profile.onboarded) return
+    const u = currentUser()
+    if (!u) return
+    let code = null
+    try { code = localStorage.getItem(JOIN_KEY) } catch {}
+    const crew = () => crewInfo(u.id).then((c) => { if (c) joinLive(c.id, u.id); return c }).catch(() => null)
+    ;(async () => {
+      let c = await crew()
+      if (code) {
+        try { localStorage.removeItem(JOIN_KEY) } catch {}
+        if (c && c.code === code) toast(`You’re in ${c.name}`)
+        else if (c) toast('You’re already in a crew')
+        else { try { await joinCrew(code); c = await crew(); toast(c ? `You joined ${c.name}` : 'Joined') } catch (e) { toast(e.message || 'That invite didn’t work') } }
+      }
+    })()
+    const cheers = () => takeCheers(u.id).then((list) => list.forEach((x, i) => setTimeout(() => toast(`${x.from} cheered your ${x.title || 'workout'}`), 1200 + i * 3200))).catch(() => {})
+    cheers()
+    const vis = () => { if (document.visibilityState === 'visible') cheers() }
+    document.addEventListener('visibilitychange', vis)
+    return () => document.removeEventListener('visibilitychange', vis)
+  }, [authed, state.profile.onboarded])
+
   // reopen a workout that was in progress if the app was closed mid-session
   useEffect(() => {
     if (activeSession(getState()) && getState().profile.onboarded) {
@@ -76,12 +133,14 @@ export default function App() {
   }, [])
   useEffect(() => { try { sessionStorage.setItem('callisto:open', screen?.kind || '') } catch {} }, [screen])
 
-  const tone = !state.profile.onboarded ? TONES.train : TONES[toneOf(state)]
+  const toneKey = !state.profile.onboarded ? 'train' : toneOf(state)
+  const tone = TONES[toneKey]
+  const theme = useTheme(state.settings?.theme || 'auto')
   useEffect(() => startLiquid(document.getElementById('root')), [])
   useEffect(() => {
     document.body.style.backgroundColor = tone
-    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', tone)
-  }, [tone])
+    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', TONE_HEX[theme][toneKey])
+  }, [tone, theme])
 
   let body
   if (authed === 'checking') body = null
@@ -96,7 +155,7 @@ export default function App() {
             aria-hidden={t.id !== tab} initial={{ opacity: 0, scale: 0.985 }}
             animate={t.id === tab ? { opacity: 1, scale: 1, visibility: 'visible' } : { opacity: 0, scale: 0.985, transitionEnd: { visibility: 'hidden' } }}
             transition={{ type: 'spring', bounce: 0, duration: dur(t.id === tab ? 0.34 : 0.22) }}>
-            {t.id === 'today' && <TodayM openSession={nav.session} openFlow={nav.flow} openCardio={nav.cardio} openCalendar={nav.calendar} />}
+            {t.id === 'today' && <TodayM openSession={nav.session} openFlow={nav.flow} openCardio={nav.cardio} openCalendar={nav.calendar} openRecap={nav.recap} />}
             {t.id === 'calendar' && <CalendarM />}
             {t.id === 'progress' && <ProgressM />}
             {t.id === 'you' && <YouM signedIn={authed === 'in'} />}
@@ -107,6 +166,7 @@ export default function App() {
         <AnimatePresence>
           {screen?.kind === 'session' && <Session key="session" origin={screen.origin} onClose={() => setScreen(null)} />}
           {screen?.kind === 'flow' && <Flow key={`flow-${screen.key}`} flowKey={screen.key} origin={screen.origin} onClose={() => setScreen(null)} />}
+          {screen?.kind === 'recap' && <Recap key="recap" origin={screen.origin} onClose={() => setScreen(null)} />}
           {screen?.kind === 'cardio' && <Cardio key={`cardio-${screen.desc?.key}`} desc={screen.desc} origin={screen.origin} onClose={() => setScreen(null)} />}
         </AnimatePresence>
       </>
@@ -119,6 +179,7 @@ export default function App() {
         {body}
         <div id="overlay" style={{ position: 'absolute', inset: 0, zIndex: 50, pointerEvents: 'none' }} />
         <ToastHost />
+        <ExerciseHost />
       </div>
     </MotionConfig>
   )

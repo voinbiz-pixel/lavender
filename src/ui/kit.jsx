@@ -1,8 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { motion, AnimatePresence, useMotionValue, useTransform, animate, useDragControls } from 'framer-motion'
+import { motion, AnimatePresence, useMotionValue, useTransform, animate, useDragControls, usePresence, useReducedMotion } from 'framer-motion'
 import { haptic } from '../lib/feedback.js'
-import { shapes, MOVES } from '../engine/moves.js'
+import { shapes, MOVES, stillTime } from '../engine/moves.js'
 
 // Springs (damping ratio and response, in framer-motion terms).
 // PACE slows the whole app evenly: every spring and transition is multiplied by it.
@@ -186,25 +186,25 @@ export function Switch({ on, onChange, label }) {
 }
 
 // The ink figure, looping through a move. One colour, the far limbs lighter.
-const TONE = { near: '#0e0e0e', far: 'rgba(14,14,14,.28)', eq: '#0e0e0e', eqfar: 'rgba(14,14,14,.35)', hub: '#b7c8b3', eqline: '#0e0e0e', eqfarline: 'rgba(14,14,14,.35)', prop: 'rgba(14,14,14,.14)', ground: 'rgba(14,14,14,.18)' }
+const TONE = { near: 'var(--ink)', far: 'var(--fig-far)', eq: 'var(--ink)', eqfar: 'var(--fig-eqfar)', hub: 'var(--tone)', eqline: 'var(--ink)', eqfarline: 'var(--fig-eqfar)', prop: 'var(--fig-prop)', ground: 'var(--fig-ground)' }
 export function Figure({ id, size = 260, playing = true, style }) {
-  const [t, setT] = useState(1)
+  const still = !playing || (typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches)
+  const [t, setT] = useState(() => (still ? stillTime(id) : 0))
   useEffect(() => {
-    const still = !playing || (typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches)
-    if (still) { setT(1.2); return }
+    if (still) { setT(stillTime(id)); return }
     let raf, t0 = performance.now()
     const tick = (now) => { setT((now - t0) / 1000); raf = requestAnimationFrame(tick) }
     raf = requestAnimationFrame(tick)
     return () => cancelAnimationFrame(raf)
-  }, [id, playing])
+  }, [id, still])
   if (!MOVES[id]) return <div style={{ width: size, height: (size * 140) / 160 }} />
   return (
     <svg viewBox="0 0 160 140" width={size} height={(size * 140) / 160} style={{ display: 'block', ...style }} aria-hidden>
       {shapes(id, t).map((s, i) => {
-        if (s.k === 'line') return <line key={i} x1={s.x1} y1={s.y1} x2={s.x2} y2={s.y2} stroke={TONE[s.tone]} strokeWidth={s.w} strokeLinecap="round" />
-        if (s.k === 'circle') return <circle key={i} cx={s.cx} cy={s.cy} r={s.r} fill={TONE[s.tone]} />
-        if (s.k === 'rect') return <rect key={i} x={s.x} y={s.y} width={s.w} height={s.h} rx={s.r} fill={TONE[s.tone]} />
-        return <path key={i} d={s.d} fill="none" stroke={TONE[s.tone]} strokeWidth={s.w} strokeLinecap="round" />
+        if (s.k === 'line') return <line key={i} x1={s.x1} y1={s.y1} x2={s.x2} y2={s.y2} style={{ stroke: TONE[s.tone] }} strokeWidth={s.w} strokeLinecap="round" />
+        if (s.k === 'circle') return <circle key={i} cx={s.cx} cy={s.cy} r={s.r} style={{ fill: TONE[s.tone] }} />
+        if (s.k === 'rect') return <rect key={i} x={s.x} y={s.y} width={s.w} height={s.h} rx={s.r} style={{ fill: TONE[s.tone] }} />
+        return <path key={i} d={s.d} fill="none" style={{ stroke: TONE[s.tone] }} strokeWidth={s.w} strokeLinecap="round" />
       })}
     </svg>
   )
@@ -248,25 +248,83 @@ export function useCompact() {
 }
 
 // Where a full-screen view should grow from: the card that was pressed, in app coordinates.
+// The element is kept too, so the view can shrink back into wherever that card is now.
 export function originOf(el) {
   const app = document.querySelector('.app')?.getBoundingClientRect()
   const r = el?.getBoundingClientRect?.()
   if (!app || !r) return null
-  return { top: r.top - app.top, left: r.left - app.left, right: app.right - r.right, bottom: app.bottom - r.bottom }
+  return { top: r.top - app.top, left: r.left - app.left, right: app.right - r.right, bottom: app.bottom - r.bottom, el }
 }
 
-// A full-screen view that grows out of the card it came from, and shrinks back into it on close.
+// the card's rect right now: the same element if it is still on screen, else today's main card
+function liveRect(origin) {
+  const app = document.querySelector('.app')?.getBoundingClientRect()
+  if (!app || !origin) return null
+  const el = origin.el?.isConnected ? origin.el : document.querySelector('[data-hero] .tile')
+  const r = el?.getBoundingClientRect?.()
+  if (!r || r.width < 40 || r.height < 40) return { left: origin.left, top: origin.top, w: app.width - origin.left - origin.right, h: app.height - origin.top - origin.bottom, W: app.width, H: app.height }
+  return { left: r.left - app.left, top: r.top - app.top, w: r.width, h: r.height, W: app.width, H: app.height }
+}
+
+const mix = (a, b, p) => a + (b - a) * p
+// A full-screen view that grows out of the card it came from and settles back into it on close.
+// One progress value drives everything, and only transforms move: the frame stretches from the card
+// to the screen while the content inside scales evenly with it, so the words are there from the first
+// frame and nothing is ever an empty box. Closing can be interrupted and always aims at the card as it
+// is now.
+// Keep the screen on while a workout, routine or run is open; let it sleep again when it closes.
+export function useWakeLock(on = true) {
+  useEffect(() => {
+    if (!on || !navigator.wakeLock) return
+    let lock = null, alive = true
+    const get = () => { if (document.visibilityState === 'visible') navigator.wakeLock.request('screen').then((l) => { if (alive) lock = l; else l.release() }).catch(() => {}) }
+    const vis = () => { if (document.visibilityState === 'visible' && (!lock || lock.released)) get() }
+    get()
+    document.addEventListener('visibilitychange', vis)
+    return () => { alive = false; document.removeEventListener('visibilitychange', vis); lock?.release?.().catch?.(() => {}) }
+  }, [on])
+}
+
 export function Opener({ origin, tone, children }) {
-  const from = origin ? `inset(${origin.top}px ${origin.right}px ${origin.bottom}px ${origin.left}px round 28px)` : null
-  const full = 'inset(0px 0px 0px 0px round 0px)'
+  useWakeLock(true)
+  const [isPresent, safeToRemove] = usePresence()
+  const reduce = useReducedMotion()
+  const rect = useRef(liveRect(origin))
+  const p = useMotionValue(rect.current && !reduce ? 0 : 1)
+  const fade = useMotionValue(reduce ? 0 : 1)
+  const slide = useMotionValue(rect.current || reduce ? 0 : 1)
+  useEffect(() => {
+    if (rect.current && !reduce) animate(p, 1, { type: 'spring', bounce: 0, duration: dur(0.46) })
+    else if (reduce) animate(fade, 1, { duration: 0.2 })
+    else animate(slide, 0, { type: 'spring', bounce: 0, duration: dur(0.42) })
+  }, [])
+  const mounted = useRef(false)
+  useEffect(() => {
+    if (isPresent) {
+      // brought back while closing: reverse from wherever it is
+      if (mounted.current) { animate(p, 1, { type: 'spring', bounce: 0, duration: dur(0.4) }); animate(fade, 1, { duration: 0.2 }); animate(slide, 0, { type: 'spring', bounce: 0, duration: dur(0.4) }) }
+      mounted.current = true
+      return
+    }
+    if (reduce) { animate(fade, 0, { duration: 0.18 }).then(safeToRemove); return }
+    const r = liveRect(origin)
+    if (!r) { animate(slide, 1, { type: 'spring', bounce: 0, duration: dur(0.32) }).then(safeToRemove); return }
+    rect.current = r
+    animate(p, 0, { type: 'spring', bounce: 0, duration: dur(0.36) }).then(safeToRemove)
+  }, [isPresent])
+  const R = 28
+  const sx = useTransform(p, (v) => { const r = rect.current; return r ? mix(r.w / r.W, 1, v) : 1 })
+  const sy = useTransform(p, (v) => { const r = rect.current; return r ? mix(r.h / r.H, 1, v) : 1 })
+  const x = useTransform(p, (v) => (rect.current ? mix(rect.current.left, 0, v) : 0))
+  const y = useTransform([p, slide], ([v, s]) => (rect.current ? mix(rect.current.top, 0, v) : 0) + s * (rect.current?.H || 900))
+  const radius = useTransform([p, sx, sy], ([v, a, b]) => { const r = mix(R, 0, Math.min(1, v * 1.15)); return `${r / a}px / ${r / b}px` })
+  // the frame is a solid card at the start, so it can melt into the real card underneath
+  const op = useTransform([p, fade], ([v, f]) => Math.min(1, v / 0.12) * f)
+  const innerSy = useTransform([sx, sy], ([a, b]) => a / b)
+  const innerOp = useTransform(p, (v) => Math.min(1, Math.max(0, (v - 0.04) / 0.3)))
   return (
-    <motion.div className="screen" style={{ '--tone': tone, background: tone, transition: 'background-color 1.02s cubic-bezier(.2,.8,.2,1)' }}
-      initial={from ? { clipPath: from } : { y: '100%' }}
-      animate={from ? { clipPath: full } : { y: 0 }}
-      exit={from ? { clipPath: from } : { y: '100%' }}
-      transition={{ type: 'spring', bounce: 0, duration: dur(0.5) }}>
-      <motion.div style={{ position: 'relative', zIndex: 1, display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}
-        initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1, transition: { delay: 0.14, ...spring } }} exit={{ opacity: 0, transition: { duration: 0.2 } }}>
+    <motion.div className="screen" style={{ '--tone': tone, background: tone, transition: 'background-color 1.02s cubic-bezier(.2,.8,.2,1)', transformOrigin: '0 0', x, y, scaleX: sx, scaleY: sy, borderRadius: radius, opacity: op, overflow: 'hidden', pointerEvents: isPresent ? 'auto' : 'none' }}>
+      <motion.div style={{ position: 'absolute', left: 0, top: 0, width: '100%', height: '100%', display: 'flex', flexDirection: 'column', transformOrigin: '0 0', scaleY: innerSy, opacity: innerOp }}>
         {children}
       </motion.div>
     </motion.div>

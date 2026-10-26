@@ -1,6 +1,7 @@
 // Supabase + server API. Everything here is optional: with no env vars the app
 // runs fully local (this is how the demo artifact works).
 import { createClient } from '@supabase/supabase-js'
+import { totals } from '../engine/stats.js'
 
 const URL = import.meta.env.VITE_SUPABASE_URL
 const KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
@@ -73,6 +74,11 @@ export async function push(userId, state, dirtySessions) {
   const since = Date.now() - 60 * 864e5
   const { sessions, ...rest } = state
   rest.water = (state.water || []).filter((w) => new Date(w.at).getTime() > since)
+  // a small summary your crew can read without downloading your history
+  try {
+    const t = totals(state, state.sessions)
+    rest.stats = { ...t, last: t.last ? { title: t.last.type === 'cardio' ? t.last.title : t.last.focus, at: t.last.startedAt } : null, at: new Date().toISOString() }
+  } catch {}
   const now = new Date().toISOString()
   const ops = [
     c.from('profiles').upsert({ id: userId, display_name: state.profile.name || null, data: rest, updated_at: now }),
@@ -99,19 +105,37 @@ export async function crewInfo(userId) {
   if (!m) return null
   const { data: members } = await c.from('crew_members').select('user_id, color').eq('crew_id', m.crew_id)
   const ids = (members || []).map((x) => x.user_id)
-  const { data: profs } = ids.length ? await c.from('profiles').select('id, display_name').in('id', ids) : { data: [] }
-  const nameOf = Object.fromEntries((profs || []).map((p) => [p.id, p.display_name]))
+  const { data: profs } = ids.length ? await c.from('profiles').select('id, display_name, stats:data->stats, avatar:data->profile->avatar').in('id', ids) : { data: [] }
+  const byId = Object.fromEntries((profs || []).map((p) => [p.id, p]))
   const others = ids.filter((id) => id !== userId)
   let recent = []
   if (others.length) {
-    const { data } = await c.from('sessions').select('user_id, day_name, ended_at, volume').in('user_id', others).eq('status', 'done').order('ended_at', { ascending: false }).limit(20)
+    const { data } = await c.from('sessions').select('id, user_id, day_name, ended_at, volume, data->>type, data->>title, data->>focus').in('user_id', others).eq('status', 'done').order('ended_at', { ascending: false }).limit(20)
     recent = data || []
   }
   return {
     id: m.crews.id, name: m.crews.name, code: m.crews.code,
-    members: (members || []).map((x) => ({ id: x.user_id, name: nameOf[x.user_id] || 'Partner', color: x.color, me: x.user_id === userId })),
+    members: (members || []).map((x) => ({ id: x.user_id, name: byId[x.user_id]?.display_name || 'Partner', stats: byId[x.user_id]?.stats || null, avatar: byId[x.user_id]?.avatar || null, me: x.user_id === userId })),
     recent,
   }
+}
+
+// ---------- cheers ----------
+export const cheer = (to, sessionId, title, text) => (cloudEnabled ? api('/api/nudge', { kind: 'cheer', to, sessionId, title, text }) : null)
+export async function cheersSent(userId) {
+  const { data } = await supa().from('cheers').select('session_id').eq('from_user', userId).order('created_at', { ascending: false }).limit(100)
+  return new Set((data || []).map((r) => r.session_id))
+}
+// cheers you haven't seen yet, with who sent them; marked seen as they're read
+export async function takeCheers(userId) {
+  const c = supa()
+  const { data } = await c.from('cheers').select('id, from_user, title').eq('to_user', userId).eq('seen', false).order('created_at').limit(10)
+  if (!data?.length) return []
+  const ids = [...new Set(data.map((r) => r.from_user))]
+  const { data: profs } = await c.from('profiles').select('id, display_name').in('id', ids)
+  const name = Object.fromEntries((profs || []).map((p) => [p.id, p.display_name || 'Your crew']))
+  await c.from('cheers').update({ seen: true }).in('id', data.map((r) => r.id))
+  return data.map((r) => ({ from: name[r.from_user] || 'Your crew', title: r.title }))
 }
 
 export async function createCrew(name) {

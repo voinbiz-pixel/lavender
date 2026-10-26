@@ -10,11 +10,12 @@ import { activeSession, doneToday, titleOf, waterToday, waterGoal, addWater, und
 import { crewInfo, cloudEnabled, nudgePartner } from '../lib/cloud.js'
 import { Press, Icon, Menu, useLongPress, spring, springPop, toast, originOf } from '../ui/kit.jsx'
 import { haptic } from '../lib/feedback.js'
+import { dayJob, cardioPurpose, FLOW_PURPOSE } from '../engine/purpose.js'
 
 const enter = (i) => ({ initial: { opacity: 0, y: 14 }, animate: { opacity: 1, y: 0 }, transition: { ...spring, delay: 0.07 * i } })
 const LETTERS = ['M', 'T', 'W', 'T', 'F', 'S', 'S']
 
-export default function Today({ openSession, openFlow, openCardio, openCalendar }) {
+export default function Today({ openSession, openFlow, openCardio, openCalendar, openRecap }) {
   const state = useStore()
   const now = new Date()
   const p = state.profile
@@ -58,7 +59,7 @@ export default function Today({ openSession, openFlow, openCardio, openCalendar 
             </motion.div>
           )}
         </AnimatePresence>
-        <motion.div {...enter(2)}><MainCard state={state} openSession={openSession} openFlow={openFlow} openCardio={openCardio} flowsToday={flowsToday} /></motion.div>
+        <motion.div data-hero {...enter(2)}><MainCard state={state} openSession={openSession} openFlow={openFlow} openCardio={openCardio} openRecap={openRecap} flowsToday={flowsToday} /></motion.div>
         <motion.div {...enter(3)}><WaterCard state={state} /></motion.div>
         <motion.div {...enter(4)}><Week state={state} onOpen={openCalendar} /></motion.div>
         <Crew />
@@ -95,7 +96,7 @@ function MorningCard({ onOpen }) {
 }
 
 // ---------- the main card: today's workout, or today's stretch on a rest day ----------
-function MainCard({ state, openSession, openFlow, openCardio, flowsToday }) {
+function MainCard({ state, openSession, openFlow, openCardio, openRecap, flowsToday }) {
   const now = new Date()
   const p = state.profile
   const active = activeSession(state)
@@ -105,6 +106,8 @@ function MainCard({ state, openSession, openFlow, openCardio, flowsToday }) {
   const lp = useLongPress((r) => setMenu(r))
   const open = (e) => openSession(originOf(e.currentTarget.closest('.tile') || e.currentTarget))
 
+  // a finished plan comes first, whatever the day: there's a recap to see and a next plan to pick
+  if (p.mode !== 'yoga' && state.plan && !active && !done && todaysPlan(state, now)?.pw.over) return <PlanDoneCard state={state} openRecap={openRecap} />
   if (p.mode !== 'yoga' && state.program && (active || done || trainDay)) {
     const pos = position(state)
     const tp = todaysPlan(state, now)
@@ -119,7 +122,7 @@ function MainCard({ state, openSession, openFlow, openCardio, flowsToday }) {
         </section>
       )
     }
-    if (!active && tp?.pw.over) return <PlanDoneCard state={state} />
+    if (!active && tp?.pw.over) return <PlanDoneCard state={state} openRecap={openRecap} />
     if (!active && tp?.next?.kind === 'cardio') return <CardioCard state={state} desc={tp.next} pw={tp.pw} openCardio={openCardio} />
     if (!active && tp && !tp.next) return <FlowCard openFlow={openFlow} flowsToday={flowsToday} rest weekDone />
     const day = active ? state.program.days.find((d) => d.key === active.dayKey) || pos.day : pos.day
@@ -130,8 +133,9 @@ function MainCard({ state, openSession, openFlow, openCardio, flowsToday }) {
           style={{ padding: '24px 22px 22px', cursor: 'pointer' }} aria-label={`${active ? 'Resume' : 'Open'} today's workout, ${day.name}, ${titleOf(day.focus)}`}>
           <div className="kicker" style={{ marginBottom: 4 }}>{day.name}</div>
           <h2 className="hero">{titleOf(day.focus)}</h2>
-          <div className="small" style={{ marginTop: 8, fontSize: 15 }}>
-            {active ? 'In progress' : tp ? `Week ${tp.pw.week} of ${tp.pw.weeks} · ${tp.pw.label}` : `${day.name} · ${pos.isDeload ? 'easy week' : `week ${pos.week}`}`} · {!active && tp?.next ? estMinutes(sessionSlots(state, pos.dayIdx, { desc: tp.next })) + (tp.next.finisher ? 15 : 0) : day.minutes} min
+          <p style={{ margin: '8px auto 0', maxWidth: 290, font: '600 15px/1.3 var(--font)', textWrap: 'balance' }}>{dayJob(day.focus)}</p>
+          <div className="small" style={{ marginTop: 6, fontSize: 14 }}>
+            {active ? 'In progress' : tp ? `Week ${tp.pw.week} of ${tp.pw.weeks} · ${tp.pw.label}` : `${day.name} · ${pos.isDeload ? 'easy week' : `week ${pos.week}`}`} · {!active && tp?.next ? estMinutes(sessionSlots(state, pos.dayIdx, { desc: tp.next })) + (tp.next.finisher ? sessionMinutes(cardioSession(state, tp.next, tp.pw, { finisher: true })) : 0) : day.minutes} min
           </div>
           {extras.length > 0 && <div className="small" style={{ marginTop: 3 }}>Plus {extras.join(' and ')}</div>}
           <Parts parts={partMinutes(day)} />
@@ -166,7 +170,10 @@ function FlowCard({ openFlow, flowsToday, rest, onTrain, weekDone }) {
         <AnimatePresence mode="popLayout" initial={false}>
           <motion.h2 key={f.key} className="hero" initial={{ opacity: 0, y: 8, filter: 'blur(4px)' }} animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }} exit={{ opacity: 0, y: -8, filter: 'blur(4px)' }} transition={spring}>{f.name}</motion.h2>
         </AnimatePresence>
-        <div className="small" style={{ marginTop: 8, fontSize: 15 }}>{weekDone ? 'This week’s plan is done · ' : ''}{flowMinutes(f.steps)} min of stretching</div>
+        <AnimatePresence mode="popLayout" initial={false}>
+          <motion.p key={f.key} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={spring} style={{ margin: '8px auto 0', maxWidth: 290, font: '600 15px/1.3 var(--font)', textWrap: 'balance' }}>{FLOW_PURPOSE[f.key]}</motion.p>
+        </AnimatePresence>
+        <div className="small" style={{ marginTop: 6, fontSize: 14 }}>{weekDone ? 'This week’s plan is done · ' : ''}{flowMinutes(f.steps)} min of stretching</div>
         <div style={{ display: 'grid', gridTemplateColumns: `repeat(${FLOWS.length}, minmax(0, 1fr))`, gap: 10, marginTop: 20 }} role="radiogroup" aria-label="Choose a flow">
           {FLOWS.map((x) => (
             <Press key={x.key} className={`chip ${x.key === pick ? 'on' : ''}`} style={{ height: 40, padding: '0 10px', fontSize: 14 }} role="radio" aria-checked={x.key === pick} onClick={() => setPick(x.key)}>{x.name.split(' ')[0]}</Press>
@@ -188,7 +195,8 @@ function CardioCard({ state, desc, pw, openCardio }) {
     <Press as="div" ref={ref} role="button" tabIndex={0} className="tile center" scale={0.98} onClick={go} onKeyDown={(e) => e.key === 'Enter' && go()}
       style={{ padding: '28px 22px 22px', cursor: 'pointer' }} aria-label={`Open today's cardio, ${c.title}`}>
       <h2 className="hero">{c.title}</h2>
-      <div className="small" style={{ marginTop: 8, fontSize: 15 }}>Week {pw.week} of {pw.weeks} · {pw.label} · {sessionMinutes(c)} min</div>
+      <p style={{ margin: '8px auto 0', maxWidth: 290, font: '600 15px/1.3 var(--font)', textWrap: 'balance' }}>{cardioPurpose(c)}</p>
+      <div className="small" style={{ marginTop: 6, fontSize: 14 }}>Week {pw.week} of {pw.weeks} · {pw.label} · {sessionMinutes(c)} min</div>
       {c.note && <div className="small" style={{ marginTop: 3 }}>{c.note}</div>}
       <div style={{ width: 220, margin: '18px auto 0' }}><SegmentBars segments={c.segments} height={34} /></div>
       <div className="pill ink" style={{ marginTop: 22, height: 56 }}>Start</div>
@@ -196,12 +204,15 @@ function CardioCard({ state, desc, pw, openCardio }) {
   )
 }
 
-function PlanDoneCard({ state }) {
+function PlanDoneCard({ state, openRecap }) {
+  const ref = useRef(null)
+  const go = () => openRecap(originOf(ref.current))
   return (
-    <section className="tile center" style={{ padding: '28px 22px 26px' }}>
+    <Press as="div" ref={ref} role="button" tabIndex={0} className="tile center" scale={0.98} onClick={go} onKeyDown={(e) => e.key === 'Enter' && go()} style={{ padding: '28px 22px 22px', cursor: 'pointer' }} aria-label="See how your plan went">
       <h2 className="hero">Plan done</h2>
-      <div className="small" style={{ marginTop: 8, fontSize: 15 }}>{state.plan.weeks} weeks finished. Pick your next plan in You.</div>
-    </section>
+      <p style={{ margin: '8px auto 0', maxWidth: 290, font: '600 15px/1.3 var(--font)', textWrap: 'balance' }}>{state.plan.weeks} weeks finished. See what changed.</p>
+      <div className="pill ink" style={{ marginTop: 22, height: 56 }}>See your recap</div>
+    </Press>
   )
 }
 

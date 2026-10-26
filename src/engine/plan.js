@@ -198,6 +198,10 @@ export function earnedStage(state, pw) {
   return Math.max(1, Math.min(cal, best + 1))
 }
 
+// how long a treadmill finisher runs, from the start of the plan to the end, for a session length
+export const finisherRange = (minutes = 45) => (minutes <= 35 ? [8, 12] : minutes <= 50 ? [10, 15] : [12, 20])
+export const finisherMinutes = (minutes = 45) => finisherRange(minutes)[1]
+
 export function cardioSession(state, desc, pw, { finisher = false } = {}) {
   const plan = state.plan
   const level = plan.level || 'run'
@@ -215,8 +219,9 @@ export function cardioSession(state, desc, pw, { finisher = false } = {}) {
   }
 
   if (finisher) {
-    // 12 to 20 minutes after lifting: easy, steady work (or an incline walk for walkers and fat loss)
-    const m = Math.round(12 + 8 * f * (easyWeek ? 0.5 : 1))
+    // easy, steady work after lifting (or an incline walk for walkers and fat loss), sized to your session length
+    const [lo, hi] = finisherRange(state.profile.sessionMinutes)
+    const m = Math.round(lo + (hi - lo) * f * (easyWeek ? 0.5 : 1))
     if (level === 'run' && plan.goal !== 'lean' && plan.goal !== 'core') return { title: 'Easy run finisher', segments: [seg(2, 'brisk', inc(1)), seg(m - 2, 'jog', inc(1))] }
     return { title: 'Incline walk finisher', segments: [seg(m, 'brisk', inc(Math.round(4 + 6 * f)))] }
   }
@@ -292,7 +297,7 @@ export const sessionMinutes = (c) => Math.round(c.segments.reduce((t, s) => t + 
 const CORE = {
   flex: ['reverse_crunch', 'curl_up', 'bicycle_crunch', 'hanging_knee'],
   brace: ['dead_bug', 'plank', 'hollow_hold'],
-  twist: ['side_plank', 'bird_dog', 'pallof_press', 'suitcase_hold'],
+  twist: ['side_plank', 'bird_dog', 'pallof_press', 'suitcase_hold', 'farmer_carry'],
 }
 export function coreSlots(state, desc, pw, n, candidatesOk) {
   const main = state.plan.goal === 'core'
